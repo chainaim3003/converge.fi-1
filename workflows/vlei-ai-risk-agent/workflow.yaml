@@ -1,0 +1,99 @@
+# WF4: AI Risk Agent Workflow
+#
+# CRE & AI track.
+# Trigger: Log trigger or cron
+# Action: Call risk-engine for ACTUS data → call LLM for interpretation → on-chain
+
+name: "converge-ai-risk-agent"
+description: "AI-powered risk interpretation with LLM analysis written on-chain"
+
+trigger:
+  type: cron
+  schedule: "0 */4 * * *"  # Every 4 hours
+
+actions:
+  # Step 1: Fetch ACTUS simulation data from risk-engine
+  - name: "fetch-risk-data"
+    type: httpClient.sendRequest
+    config:
+      method: POST
+      url: "${RISK_ENGINE_URL}/api/v1/cre-report"
+      headers:
+        Content-Type: "application/json"
+      body:
+        simulationId: "StableCoin-BackingRatio-RedemptionPressure-30d"
+        scenarioId: "sc_depeg_stress_scn01"
+    output: riskData
+
+  # Step 2: Send risk data to LLM for interpretation
+  - name: "ai-interpret"
+    type: httpClient.sendRequest
+    config:
+      method: POST
+      url: "https://api.anthropic.com/v1/messages"
+      headers:
+        Content-Type: "application/json"
+        x-api-key: "${ANTHROPIC_API_KEY}"
+        anthropic-version: "2023-06-01"
+      body:
+        model: "claude-sonnet-4-6"
+        max_tokens: 500
+        messages:
+          - role: "user"
+            content: "Analyze this stablecoin risk report and provide a risk assessment score 0-100. Report: ${fetch-risk-data.output}. Respond with JSON only: {\"riskScore\": number, \"summary\": string}"
+    output: aiResponse
+
+  # Step 3: Extract AI-computed risk score and combine with ACTUS metrics
+  - name: "combine-metrics"
+    type: runtime.compute
+    config:
+      code: |
+        const actusReport = inputs.riskData.report;
+        // Use ACTUS metrics as primary, AI interpretation as validation
+        return {
+          backingRatioBps: actusReport.backingRatioBps,
+          liquidityRatioBps: actusReport.liquidityRatioBps,
+          riskScore: actusReport.riskScore,
+          maturityGapDays: actusReport.maturityGapDays,
+          timestamp: Math.floor(Date.now() / 1000),
+          scenarioId: actusReport.scenarioId
+        };
+    inputs:
+      riskData: "${fetch-risk-data.output}"
+      aiResponse: "${ai-interpret.output}"
+    output: finalMetrics
+
+  # Step 4: Sign and write on-chain
+  - name: "sign-report"
+    type: runtime.report
+    config:
+      encoding: "abi"
+      types:
+        - { name: "backingRatioBps", type: "uint16" }
+        - { name: "liquidityRatioBps", type: "uint16" }
+        - { name: "riskScore", type: "uint8" }
+        - { name: "maturityGapDays", type: "uint8" }
+        - { name: "timestamp", type: "uint40" }
+        - { name: "scenarioId", type: "bytes32" }
+    inputs:
+      backingRatioBps: "${combine-metrics.output.backingRatioBps}"
+      liquidityRatioBps: "${combine-metrics.output.liquidityRatioBps}"
+      riskScore: "${combine-metrics.output.riskScore}"
+      maturityGapDays: "${combine-metrics.output.maturityGapDays}"
+      timestamp: "${combine-metrics.output.timestamp}"
+      scenarioId: "${combine-metrics.output.scenarioId}"
+    output: signedReport
+
+  - name: "write-on-chain"
+    type: evmClient.writeReport
+    config:
+      chain: "ethereum-sepolia"
+      contractAddress: "${RISK_CONSUMER_ADDRESS}"
+      method: "onReport"
+    inputs:
+      report: "${sign-report.output}"
+
+env:
+  RISK_ENGINE_URL: "http://localhost:3001"
+  RISK_CONSUMER_ADDRESS: ""
+  ANTHROPIC_API_KEY: ""

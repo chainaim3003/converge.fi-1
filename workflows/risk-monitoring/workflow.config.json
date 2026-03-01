@@ -1,0 +1,20 @@
+{
+  "name": "converge-fi-risk-monitoring",
+  "version": "1.0.0",
+  "description": "WF1: Hourly ACTUS simulation → CRE risk report → on-chain policy update",
+  "trigger": {
+    "type": "cron",
+    "schedule": "0 * * * *"
+  },
+  "config": {
+    "RISK_CONSUMER_ADDRESS": "",
+    "SEPOLIA_RPC_URL": ""
+  },
+  "secrets": {
+    "RISK_ENGINE_URL": "http://localhost:3001"
+  },
+  "target": {
+    "chainId": 11155111,
+    "network": "sepolia"
+  }
+}

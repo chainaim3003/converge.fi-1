@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+risk-engine/node_modules/
+dashboard/node_modules/
+
+# Build artifacts
+artifacts/
+cache/
+dist/
+typechain-types/
+coverage/
+coverage.json
+risk-engine/dist/
+dashboard/dist/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Hardhat
+cache/
+artifacts/

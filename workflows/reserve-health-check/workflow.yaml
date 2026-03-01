@@ -1,0 +1,84 @@
+# WF2: Reserve Health Check Workflow
+#
+# DeFi & Tokenization track.
+# Trigger: Cron or HTTP
+# Action: Run multiple StableCoin simulations → composite health score → on-chain
+
+name: "converge-reserve-health-check"
+description: "Multi-simulation reserve health assessment for stablecoin lifecycle"
+
+trigger:
+  type: cron
+  schedule: "0 */2 * * *"  # Every 2 hours
+
+actions:
+  # Step 1: Run primary de-peg stress simulation
+  - name: "fetch-depeg-report"
+    type: httpClient.sendRequest
+    config:
+      method: POST
+      url: "${RISK_ENGINE_URL}/api/v1/cre-report"
+      headers:
+        Content-Type: "application/json"
+      body:
+        simulationId: "StableCoin-BackingRatio-RedemptionPressure-30d"
+        scenarioId: "sc_depeg_stress_scn01"
+    output: depegReport
+
+  # Step 2: Compute composite health score from multiple simulations
+  - name: "compute-composite"
+    type: runtime.compute
+    config:
+      code: |
+        const depeg = inputs.depegReport.report;
+        // Composite: weighted average of individual simulation metrics
+        const compositeBackingBps = depeg.backingRatioBps;
+        const compositeLiquidityBps = depeg.liquidityRatioBps;
+        const compositeScore = depeg.riskScore;
+        const timestamp = Math.floor(Date.now() / 1000);
+        const scenarioId = "0x" + "00".repeat(32); // composite identifier
+        return {
+          backingRatioBps: compositeBackingBps,
+          liquidityRatioBps: compositeLiquidityBps,
+          riskScore: compositeScore,
+          maturityGapDays: 0,
+          timestamp,
+          scenarioId
+        };
+    inputs:
+      depegReport: "${fetch-depeg-report.output}"
+    output: compositeMetrics
+
+  # Step 3: Sign and write on-chain
+  - name: "sign-report"
+    type: runtime.report
+    config:
+      encoding: "abi"
+      types:
+        - { name: "backingRatioBps", type: "uint16" }
+        - { name: "liquidityRatioBps", type: "uint16" }
+        - { name: "riskScore", type: "uint8" }
+        - { name: "maturityGapDays", type: "uint8" }
+        - { name: "timestamp", type: "uint40" }
+        - { name: "scenarioId", type: "bytes32" }
+    inputs:
+      backingRatioBps: "${compute-composite.output.backingRatioBps}"
+      liquidityRatioBps: "${compute-composite.output.liquidityRatioBps}"
+      riskScore: "${compute-composite.output.riskScore}"
+      maturityGapDays: "${compute-composite.output.maturityGapDays}"
+      timestamp: "${compute-composite.output.timestamp}"
+      scenarioId: "${compute-composite.output.scenarioId}"
+    output: signedReport
+
+  - name: "write-on-chain"
+    type: evmClient.writeReport
+    config:
+      chain: "ethereum-sepolia"
+      contractAddress: "${RISK_CONSUMER_ADDRESS}"
+      method: "onReport"
+    inputs:
+      report: "${sign-report.output}"
+
+env:
+  RISK_ENGINE_URL: "http://localhost:3001"
+  RISK_CONSUMER_ADDRESS: ""

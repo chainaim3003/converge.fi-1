@@ -1,0 +1,8 @@
+{
+  "id": "stablecoin-default",
+  "name": "StableCoin Default Portfolio",
+  "description": "Default portfolio for stablecoin risk monitoring — uses the verified BackingRatio + RedemptionPressure 30-day simulation.",
+  "simulations": [
+    "StableCoin-BackingRatio-RedemptionPressure-30d"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "network": "",
+  "chainId": 0,
+  "deployer": "",
+  "deployedAt": "",
+  "contracts": {
+    "BackingRatioPolicy": "",
+    "LiquidityRatioPolicy": "",
+    "RiskScorePolicy": "",
+    "RiskConsumerWithACE": "",
+    "ConvergeStablecoin": ""
+  },
+  "constructorArgs": {
+    "BackingRatioPolicy": {
+      "thresholdBps": 10000,
+      "riskConsumer": ""
+    },
+    "LiquidityRatioPolicy": {
+      "thresholdBps": 1000,
+      "riskConsumer": ""
+    },
+    "RiskScorePolicy": {
+      "threshold": 70,
+      "riskConsumer": ""
+    },
+    "RiskConsumerWithACE": {
+      "creForwarder": ""
+    },
+    "ConvergeStablecoin": {
+      "name": "Converge USD",
+      "symbol": "cvUSD",
+      "maxStaleAge": 3600
+    }
+  }
+}

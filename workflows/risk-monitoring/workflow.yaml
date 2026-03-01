@@ -1,0 +1,88 @@
+# WF1: Risk Monitoring Workflow
+#
+# PRIMARY workflow for Risk & Compliance track.
+# Trigger: Cron schedule (every 1 hour)
+# Action: Call risk-engine → ACTUS simulation → compute metrics → write on-chain
+#
+# CRE Docs: https://docs.chain.link/cre
+
+name: "converge-risk-monitoring"
+description: "Automated stablecoin risk monitoring via ACTUS simulations"
+
+trigger:
+  type: cron
+  schedule: "0 * * * *"  # Every hour
+
+actions:
+  # Step 1: Call risk-engine to run ACTUS simulation and compute metrics
+  - name: "fetch-risk-report"
+    type: httpClient.sendRequest
+    config:
+      method: POST
+      url: "${RISK_ENGINE_URL}/api/v1/cre-report"
+      headers:
+        Content-Type: "application/json"
+      body:
+        simulationId: "StableCoin-BackingRatio-RedemptionPressure-30d"
+        scenarioId: "sc_depeg_stress_scn01"
+    output: riskReport
+
+  # Step 2: Extract and validate metrics from risk-engine response
+  - name: "process-metrics"
+    type: runtime.compute
+    config:
+      code: |
+        const report = inputs.riskReport.report;
+        const backingRatioBps = report.backingRatioBps;
+        const liquidityRatioBps = report.liquidityRatioBps;
+        const riskScore = report.riskScore;
+        const maturityGapDays = report.maturityGapDays;
+        const timestamp = report.timestamp;
+        const scenarioId = report.scenarioId;
+
+        return {
+          backingRatioBps,
+          liquidityRatioBps,
+          riskScore,
+          maturityGapDays,
+          timestamp,
+          scenarioId
+        };
+    inputs:
+      riskReport: "${fetch-risk-report.output}"
+    output: metrics
+
+  # Step 3: Sign the report
+  - name: "sign-report"
+    type: runtime.report
+    config:
+      encoding: "abi"
+      types:
+        - { name: "backingRatioBps", type: "uint16" }
+        - { name: "liquidityRatioBps", type: "uint16" }
+        - { name: "riskScore", type: "uint8" }
+        - { name: "maturityGapDays", type: "uint8" }
+        - { name: "timestamp", type: "uint40" }
+        - { name: "scenarioId", type: "bytes32" }
+    inputs:
+      backingRatioBps: "${process-metrics.output.backingRatioBps}"
+      liquidityRatioBps: "${process-metrics.output.liquidityRatioBps}"
+      riskScore: "${process-metrics.output.riskScore}"
+      maturityGapDays: "${process-metrics.output.maturityGapDays}"
+      timestamp: "${process-metrics.output.timestamp}"
+      scenarioId: "${process-metrics.output.scenarioId}"
+    output: signedReport
+
+  # Step 4: Write signed report to RiskConsumerWithACE on Sepolia
+  - name: "write-on-chain"
+    type: evmClient.writeReport
+    config:
+      chain: "ethereum-sepolia"
+      contractAddress: "${RISK_CONSUMER_ADDRESS}"
+      method: "onReport"
+    inputs:
+      report: "${sign-report.output}"
+
+env:
+  RISK_ENGINE_URL: "http://localhost:3001"
+  RISK_CONSUMER_ADDRESS: ""  # Set after deployment
