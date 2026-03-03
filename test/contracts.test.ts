@@ -9,7 +9,6 @@
 
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { SignerWithProvider } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 // Helper: encode a risk report matching RiskReportExtractor layout
@@ -328,13 +327,9 @@ describe("Converge.fi — Circuit Breaker Tests", function () {
           .withArgs(8800, 10000);
       });
 
-      it("should emit MintBlocked event on backing failure", async function () {
-        await submitReport(8800, 1500, 30, 0);
-        const mintAmount = ethers.parseEther("1000");
-        await expect(stablecoin.connect(operator).mint(user.address, mintAmount))
-          .to.emit(stablecoin, "MintBlocked")
-          .withArgs(operator.address, mintAmount, "Backing ratio below threshold");
-      });
+      // NOTE: EVM reverts discard all events emitted in the same transaction.
+      // The emit MintBlocked() before revert MintBlockedBacking() is rolled back,
+      // so we cannot observe the event. The revert itself is tested above.
     });
 
     // ─── Mint — Gate 2 Blocked (Liquidity) ───
