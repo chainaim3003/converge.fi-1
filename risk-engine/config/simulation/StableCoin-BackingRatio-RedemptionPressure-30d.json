@@ -1,0 +1,317 @@
+{
+  "info": {
+    "_postman_id": "sc-br-rp-30d-001",
+    "name": "StableCoin-BackingRatio-RedemptionPressure-30d",
+    "description": "ACTUS Stablecoin: BACKING RATIO + REDEMPTION PRESSURE (de-peg stress scenario).\n\nTWO stablecoin behavioral models run simultaneously:\n  1. BackingRatioModel (6.1) — monitors reserve adequacy vs outstanding supply\n  2. RedemptionPressureModel (6.2) — applies empirical redemption curves from 609 de-peg events\n\nScenario: Realistic stablecoin stress (inspired by USDC March 2023 / UST May 2022):\n  Issuer: StableCoinA, $100M outstanding supply\n  Reserves start at $102M (102% backed), erode to $88M (88% backed)\n  Cash reserves start at 40% ($40.8M), drop to 15% ($13.2M)\n  Peg deviation: 0% → 1% de-peg at day 10 → 5% de-peg at day 15 → recovery\n\nKEY DYNAMICS:\n  Days 1-9:   Fully backed, adequate liquidity → both models return 0.0\n  Days 10-14: Reserves decline, backing < 100% → BackingRatio flags underbacking\n              Peg deviation exceeds 0.5% → RedemptionPressure activates\n  Days 15-20: Peak stress: backing 88%, peg dev 5% → both models fire heavily\n              Per 609-event data: 5% de-peg → 28.5% daily redemption rate\n  Days 21-30: Recovery: reserves stabilize, peg returns → signals subside\n\nRegulatory context:\n  STABLE Act:  backing >= 100% at all times\n  GENIUS Act:  backing >= 100%, HQLA composition, WAM <= 93 days\n  MiCA EMT:   backing >= 100%, 30-day attestation cycle\n\nScholarly basis:\n  - 609 de-peg event dataset: redemption curve calibration\n  - SVB/USDC March 2023: $3.3B frozen, 35% liquidity threshold\n  - UST/LUNA May 2022: death spiral from inadequate backing\n\nContract: PAM representing stablecoin liability\n  notionalPrincipal = -100000000 (negative = liability = outstanding supply)\n  nominalInterestRate = 0.0 (stablecoins pay no interest)\n  statusDate → maturityDate: 30-day monitoring window\n\nOpen Postman Console (Ctrl+Alt+C) before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Add SC_TOTAL_RESERVES (declining reserves)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addReferenceIndex",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addReferenceIndex"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorID\":\"SC_RESERVES_01\",\"marketObjectCode\":\"SC_TOTAL_RESERVES\",\"base\":1.0,\"data\":[{\"time\":\"2026-03-01T00:00:00\",\"value\":102000000},{\"time\":\"2026-03-02T00:00:00\",\"value\":101800000},{\"time\":\"2026-03-03T00:00:00\",\"value\":101500000},{\"time\":\"2026-03-04T00:00:00\",\"value\":101000000},{\"time\":\"2026-03-05T00:00:00\",\"value\":100500000},{\"time\":\"2026-03-06T00:00:00\",\"value\":100000000},{\"time\":\"2026-03-07T00:00:00\",\"value\":99500000},{\"time\":\"2026-03-08T00:00:00\",\"value\":99000000},{\"time\":\"2026-03-09T00:00:00\",\"value\":98000000},{\"time\":\"2026-03-10T00:00:00\",\"value\":97000000},{\"time\":\"2026-03-11T00:00:00\",\"value\":95500000},{\"time\":\"2026-03-12T00:00:00\",\"value\":94000000},{\"time\":\"2026-03-13T00:00:00\",\"value\":92500000},{\"time\":\"2026-03-14T00:00:00\",\"value\":91000000},{\"time\":\"2026-03-15T00:00:00\",\"value\":89500000},{\"time\":\"2026-03-16T00:00:00\",\"value\":88500000},{\"time\":\"2026-03-17T00:00:00\",\"value\":88000000},{\"time\":\"2026-03-18T00:00:00\",\"value\":88000000},{\"time\":\"2026-03-19T00:00:00\",\"value\":88500000},{\"time\":\"2026-03-20T00:00:00\",\"value\":89000000},{\"time\":\"2026-03-21T00:00:00\",\"value\":90000000},{\"time\":\"2026-03-22T00:00:00\",\"value\":91000000},{\"time\":\"2026-03-23T00:00:00\",\"value\":92500000},{\"time\":\"2026-03-24T00:00:00\",\"value\":94000000},{\"time\":\"2026-03-25T00:00:00\",\"value\":95500000},{\"time\":\"2026-03-26T00:00:00\",\"value\":97000000},{\"time\":\"2026-03-27T00:00:00\",\"value\":98000000},{\"time\":\"2026-03-28T00:00:00\",\"value\":99000000},{\"time\":\"2026-03-29T00:00:00\",\"value\":100000000},{\"time\":\"2026-03-30T00:00:00\",\"value\":100500000}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('SC_TOTAL_RESERVES added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 SC_RESERVES_01: $102M \\u2192 $88M trough \\u2192 $100.5M recovery');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "2. Add SC_CASH_RESERVE (liquidity stress)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addReferenceIndex",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addReferenceIndex"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorID\":\"SC_CASH_01\",\"marketObjectCode\":\"SC_CASH_RESERVE\",\"base\":1.0,\"data\":[{\"time\":\"2026-03-01T00:00:00\",\"value\":40800000},{\"time\":\"2026-03-02T00:00:00\",\"value\":40200000},{\"time\":\"2026-03-03T00:00:00\",\"value\":39500000},{\"time\":\"2026-03-04T00:00:00\",\"value\":38500000},{\"time\":\"2026-03-05T00:00:00\",\"value\":37000000},{\"time\":\"2026-03-06T00:00:00\",\"value\":35500000},{\"time\":\"2026-03-07T00:00:00\",\"value\":33000000},{\"time\":\"2026-03-08T00:00:00\",\"value\":30000000},{\"time\":\"2026-03-09T00:00:00\",\"value\":27000000},{\"time\":\"2026-03-10T00:00:00\",\"value\":24000000},{\"time\":\"2026-03-11T00:00:00\",\"value\":21000000},{\"time\":\"2026-03-12T00:00:00\",\"value\":18500000},{\"time\":\"2026-03-13T00:00:00\",\"value\":16500000},{\"time\":\"2026-03-14T00:00:00\",\"value\":15000000},{\"time\":\"2026-03-15T00:00:00\",\"value\":13500000},{\"time\":\"2026-03-16T00:00:00\",\"value\":13200000},{\"time\":\"2026-03-17T00:00:00\",\"value\":13500000},{\"time\":\"2026-03-18T00:00:00\",\"value\":14000000},{\"time\":\"2026-03-19T00:00:00\",\"value\":15000000},{\"time\":\"2026-03-20T00:00:00\",\"value\":17000000},{\"time\":\"2026-03-21T00:00:00\",\"value\":19000000},{\"time\":\"2026-03-22T00:00:00\",\"value\":22000000},{\"time\":\"2026-03-23T00:00:00\",\"value\":25000000},{\"time\":\"2026-03-24T00:00:00\",\"value\":28000000},{\"time\":\"2026-03-25T00:00:00\",\"value\":31000000},{\"time\":\"2026-03-26T00:00:00\",\"value\":33000000},{\"time\":\"2026-03-27T00:00:00\",\"value\":35000000},{\"time\":\"2026-03-28T00:00:00\",\"value\":36500000},{\"time\":\"2026-03-29T00:00:00\",\"value\":37500000},{\"time\":\"2026-03-30T00:00:00\",\"value\":38000000}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('SC_CASH_RESERVE added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 SC_CASH_01: $40.8M (40%) \\u2192 $13.2M (15%) \\u2192 $38M recovery');",
+        "    console.log('   \\u2192 Crosses 35% liquidity threshold at day 6');",
+        "    console.log('   \\u2192 Per 609-event data: <20% liquidity \\u2192 23% recovery rate');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "3. Add STABLECOIN_PEG_DEV (de-peg stress)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addReferenceIndex",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addReferenceIndex"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorID\":\"SC_PEG_DEV_01\",\"marketObjectCode\":\"STABLECOIN_PEG_DEV\",\"base\":1.0,\"data\":[{\"time\":\"2026-03-01T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-02T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-03T00:00:00\",\"value\":0.001},{\"time\":\"2026-03-04T00:00:00\",\"value\":0.001},{\"time\":\"2026-03-05T00:00:00\",\"value\":0.002},{\"time\":\"2026-03-06T00:00:00\",\"value\":0.002},{\"time\":\"2026-03-07T00:00:00\",\"value\":0.003},{\"time\":\"2026-03-08T00:00:00\",\"value\":0.004},{\"time\":\"2026-03-09T00:00:00\",\"value\":0.005},{\"time\":\"2026-03-10T00:00:00\",\"value\":0.008},{\"time\":\"2026-03-11T00:00:00\",\"value\":0.012},{\"time\":\"2026-03-12T00:00:00\",\"value\":0.018},{\"time\":\"2026-03-13T00:00:00\",\"value\":0.025},{\"time\":\"2026-03-14T00:00:00\",\"value\":0.035},{\"time\":\"2026-03-15T00:00:00\",\"value\":0.050},{\"time\":\"2026-03-16T00:00:00\",\"value\":0.048},{\"time\":\"2026-03-17T00:00:00\",\"value\":0.042},{\"time\":\"2026-03-18T00:00:00\",\"value\":0.035},{\"time\":\"2026-03-19T00:00:00\",\"value\":0.025},{\"time\":\"2026-03-20T00:00:00\",\"value\":0.018},{\"time\":\"2026-03-21T00:00:00\",\"value\":0.012},{\"time\":\"2026-03-22T00:00:00\",\"value\":0.008},{\"time\":\"2026-03-23T00:00:00\",\"value\":0.005},{\"time\":\"2026-03-24T00:00:00\",\"value\":0.003},{\"time\":\"2026-03-25T00:00:00\",\"value\":0.002},{\"time\":\"2026-03-26T00:00:00\",\"value\":0.001},{\"time\":\"2026-03-27T00:00:00\",\"value\":0.001},{\"time\":\"2026-03-28T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-29T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-30T00:00:00\",\"value\":0.0}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('PEG_DEV added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 SC_PEG_DEV_01: 0% \\u2192 0.5% trigger \\u2192 5% peak \\u2192 0% recovery');",
+        "    console.log('   \\u2192 Calibrated breakpoints from 609 historical de-peg events');",
+        "    console.log('   \\u2192 5% de-peg \\u2192 28.5% daily redemption rate (median)');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "4. Add BackingRatioModel (br_sc01)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addBackingRatioModel",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addBackingRatioModel"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorId\":\"br_sc01\",\"totalReservesMOC\":\"SC_TOTAL_RESERVES\",\"cashReserveMOC\":\"SC_CASH_RESERVE\",\"backingThreshold\":1.0,\"liquidityThreshold\":0.35,\"monitoringEventTimes\":[\"2026-03-01T00:00:00\",\"2026-03-02T00:00:00\",\"2026-03-03T00:00:00\",\"2026-03-04T00:00:00\",\"2026-03-05T00:00:00\",\"2026-03-06T00:00:00\",\"2026-03-07T00:00:00\",\"2026-03-08T00:00:00\",\"2026-03-09T00:00:00\",\"2026-03-10T00:00:00\",\"2026-03-11T00:00:00\",\"2026-03-12T00:00:00\",\"2026-03-13T00:00:00\",\"2026-03-14T00:00:00\",\"2026-03-15T00:00:00\",\"2026-03-16T00:00:00\",\"2026-03-17T00:00:00\",\"2026-03-18T00:00:00\",\"2026-03-19T00:00:00\",\"2026-03-20T00:00:00\",\"2026-03-21T00:00:00\",\"2026-03-22T00:00:00\",\"2026-03-23T00:00:00\",\"2026-03-24T00:00:00\",\"2026-03-25T00:00:00\",\"2026-03-26T00:00:00\",\"2026-03-27T00:00:00\",\"2026-03-28T00:00:00\",\"2026-03-29T00:00:00\",\"2026-03-30T00:00:00\"]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('BackingRatioModel added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    console.log('\\u2705 br_sc01: BackingRatioModel (daily monitoring, 30 days)');",
+        "    console.log('   backingThreshold=1.0 (100% per STABLE/GENIUS/MiCA)');",
+        "    console.log('   liquidityThreshold=0.35 (35% = 94% recovery rate cutoff)');",
+        "    console.log('   \\u2192 Backing drops below 100% around day 6-7');",
+        "    console.log('   \\u2192 Liquidity drops below 35% around day 6');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "5. Add RedemptionPressureModel (rp_sc01)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addRedemptionPressureModel",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addRedemptionPressureModel"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorId\":\"rp_sc01\",\"pegDeviationMOC\":\"STABLECOIN_PEG_DEV\",\"cashReserveMOC\":\"SC_CASH_RESERVE\",\"pegDeviationThreshold\":0.005,\"monitoringEventTimes\":[\"2026-03-01T00:00:00\",\"2026-03-02T00:00:00\",\"2026-03-03T00:00:00\",\"2026-03-04T00:00:00\",\"2026-03-05T00:00:00\",\"2026-03-06T00:00:00\",\"2026-03-07T00:00:00\",\"2026-03-08T00:00:00\",\"2026-03-09T00:00:00\",\"2026-03-10T00:00:00\",\"2026-03-11T00:00:00\",\"2026-03-12T00:00:00\",\"2026-03-13T00:00:00\",\"2026-03-14T00:00:00\",\"2026-03-15T00:00:00\",\"2026-03-16T00:00:00\",\"2026-03-17T00:00:00\",\"2026-03-18T00:00:00\",\"2026-03-19T00:00:00\",\"2026-03-20T00:00:00\",\"2026-03-21T00:00:00\",\"2026-03-22T00:00:00\",\"2026-03-23T00:00:00\",\"2026-03-24T00:00:00\",\"2026-03-25T00:00:00\",\"2026-03-26T00:00:00\",\"2026-03-27T00:00:00\",\"2026-03-28T00:00:00\",\"2026-03-29T00:00:00\",\"2026-03-30T00:00:00\"]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('RedemptionPressureModel added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    console.log('\\u2705 rp_sc01: RedemptionPressureModel (daily monitoring, 30 days)');",
+        "    console.log('   pegDeviationThreshold=0.005 (0.5% minimum to trigger)');",
+        "    console.log('   Calibrated from 609 historical de-peg events:');",
+        "    console.log('     0.5% de-peg \\u2192 2.3% daily redemption');",
+        "    console.log('     1.0% de-peg \\u2192 5.7% daily redemption');",
+        "    console.log('     5.0% de-peg \\u2192 28.5% daily redemption');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "6. Add Stablecoin Stress Scenario",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addScenario",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addScenario"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"scenarioID\":\"sc_depeg_stress_scn01\",\"riskFactorDescriptors\":[{\"riskFactorID\":\"SC_RESERVES_01\",\"riskFactorType\":\"ReferenceIndex\"},{\"riskFactorID\":\"SC_CASH_01\",\"riskFactorType\":\"ReferenceIndex\"},{\"riskFactorID\":\"SC_PEG_DEV_01\",\"riskFactorType\":\"ReferenceIndex\"},{\"riskFactorID\":\"br_sc01\",\"riskFactorType\":\"BackingRatioModel\"},{\"riskFactorID\":\"rp_sc01\",\"riskFactorType\":\"RedemptionPressureModel\"}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('Stablecoin stress scenario created', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 sc_depeg_stress_scn01: 3 indexes + 2 stablecoin behavioral models');",
+        "    console.log('   ReferenceIndex: SC_TOTAL_RESERVES, SC_CASH_RESERVE, STABLECOIN_PEG_DEV');",
+        "    console.log('   BackingRatioModel: br_sc01');",
+        "    console.log('   RedemptionPressureModel: rp_sc01');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "7a. Verify BackingRatioModel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findBackingRatioModel/br_sc01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findBackingRatioModel", "br_sc01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('BackingRatioModel verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data.riskFactorId).to.eql('br_sc01');",
+        "    pm.expect(data.backingThreshold).to.eql(1.0);",
+        "    pm.expect(data.liquidityThreshold).to.eql(0.35);",
+        "    console.log('\\u2705 br_sc01 confirmed: backingThresh=' + data.backingThreshold + ', liqThresh=' + data.liquidityThreshold);",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "7b. Verify RedemptionPressureModel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findRedemptionPressureModel/rp_sc01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findRedemptionPressureModel", "rp_sc01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('RedemptionPressureModel verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data.riskFactorId).to.eql('rp_sc01');",
+        "    pm.expect(data.pegDeviationThreshold).to.eql(0.005);",
+        "    console.log('\\u2705 rp_sc01 confirmed: pegDevThresh=' + data.pegDeviationThreshold);",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "7c. Verify Scenario",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findScenario/sc_depeg_stress_scn01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findScenario", "sc_depeg_stress_scn01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('Scenario verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data.scenarioID).to.eql('sc_depeg_stress_scn01');",
+        "    var types = data.riskFactorDescriptors.map(function(d){return d.riskFactorType;});",
+        "    pm.expect(types).to.include('BackingRatioModel');",
+        "    pm.expect(types).to.include('RedemptionPressureModel');",
+        "    console.log('\\u2705 Scenario descriptors: ' + JSON.stringify(types));",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "8. Run Stablecoin De-Peg Stress Simulation",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8083/rf2/scenarioSimulation",
+          "protocol": "http",
+          "host": ["localhost:8083"],
+          "path": ["rf2", "scenarioSimulation"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"contracts\":[{\"calendar\":\"NC\",\"businessDayConvention\":\"SCF\",\"contractType\":\"PAM\",\"statusDate\":\"2026-02-28T00:00:00\",\"contractRole\":\"RPA\",\"contractID\":\"StableCoinA-Liability-01\",\"cycleAnchorDateOfInterestPayment\":\"2026-03-31T00:00:00\",\"cycleOfInterestPayment\":\"P1ML0\",\"nominalInterestRate\":0.0,\"dayCountConvention\":\"30E360\",\"currency\":\"USD\",\"contractDealDate\":\"2026-02-28T00:00:00\",\"initialExchangeDate\":\"2026-03-01T00:00:00\",\"maturityDate\":\"2026-03-31T00:00:00\",\"notionalPrincipal\":100000000,\"premiumDiscountAtIED\":0,\"stablecoinModels\":[\"br_sc01\",\"rp_sc01\"]}],\"scenarioDescriptor\":{\"scenarioID\":\"sc_depeg_stress_scn01\",\"scenarioType\":\"scenario\"},\"simulateTo\":\"2026-03-31T00:00:00\",\"monitoringTimes\":[]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('Stablecoin de-peg stress simulation', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data[0].status).to.eql('Success');",
+        "    var events = data[0].events;",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "    console.log('STABLECOIN DE-PEG STRESS: BACKING RATIO + REDEMPTION PRESSURE');",
+        "    console.log('  Issuer: StableCoinA ($100M outstanding supply)');",
+        "    console.log('  Reserves: $102M \\u2192 $88M trough \\u2192 recovery');",
+        "    console.log('  Peg deviation: 0% \\u2192 5% peak \\u2192 0% recovery');",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "    console.log('Total events: ' + events.length);",
+        "    console.log('');",
+        "",
+        "    var counts = {};",
+        "    events.forEach(function(e){counts[e.type]=(counts[e.type]||0)+1;});",
+        "    Object.keys(counts).forEach(function(k){console.log('  '+k+': '+counts[k]);});",
+        "    console.log('');",
+        "",
+        "    // MRD (behavioral callout) events",
+        "    var mrds = events.filter(function(e){return e.type==='MRD'||e.type==='PP';});",
+        "    console.log('\\u2550\\u2550 BEHAVIORAL EVENTS (MRD/PP) \\u2550\\u2550');",
+        "    console.log('  Days 1-9:  Both models \\u2192 0.0 (fully backed, on peg)');",
+        "    console.log('  Days 10-14: BackingRatio flags underbacking + liquidity gap');",
+        "    console.log('  Day 15: Peak stress: 88% backing, 5% de-peg');",
+        "    console.log('  Days 21-30: Recovery phase');",
+        "    console.log('');",
+        "",
+        "    if(mrds.length > 0){",
+        "        mrds.forEach(function(m){",
+        "            console.log('  '+m.time+' type='+m.type+' payoff=$'+m.payoff.toFixed(2)+' remaining=$'+m.nominalValue.toFixed(2));",
+        "        });",
+        "    }",
+        "",
+        "    // Final",
+        "    var md = events.filter(function(e){return e.type==='MD';})[0];",
+        "    if(md){",
+        "        console.log('');",
+        "        console.log('\\u2550\\u2550 MATURITY \\u2550\\u2550');",
+        "        console.log('  Final principal: $'+md.payoff.toFixed(2));",
+        "        var loss = 100000000 - Math.abs(md.payoff);",
+        "        if(loss > 0){",
+        "            console.log('  \\u26a0\\ufe0f  Supply reduced by $'+loss.toFixed(2)+' due to behavioral risk');",
+        "        } else {",
+        "            console.log('  \\u2705 Full supply maintained');",
+        "        }",
+        "    }",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "});",
+        "",
+        "pm.test('Events generated', function(){",
+        "    var data = pm.response.json();",
+        "    pm.expect(data[0].events.length).to.be.above(0);",
+        "});"
+      ]}}]
+    }
+  ]
+}

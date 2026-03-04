@@ -3,11 +3,15 @@
  * Run a simulation and compute CRE report metrics.
  */
 
-import { ACTUSClient } from "../../api/ACTUSClient";
+import * as fs from "fs";
+import * as path from "path";
+import { config } from "../../config";
+import { runStimulation } from "../../api/StimulationRunner";
+import type { EnvironmentConfig } from "../../api/StimulationRunner";
 import { computeMetrics, formatCREReport } from "../../metrics/computeMetrics";
+import type { ACTUSEvent } from "../../types";
 
 export async function getMetricsTool(
-  client: ACTUSClient,
   simulationId: string,
   scenarioId?: string
 ) {
@@ -17,19 +21,41 @@ export async function getMetricsTool(
 
   const effectiveScenarioId = scenarioId || "sc_depeg_stress_scn01";
 
-  // Run the simulation
-  const simResult = await client.runSimulation(simulationId);
+  // Load and run the simulation
+  const filePath = path.join(config.simulationsDir, `${simulationId}.json`);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Simulation not found: ${simulationId}`);
+  }
 
-  if (simResult.events.length === 0) {
+  const collection = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+  const envConfig: EnvironmentConfig = {
+    riskServiceBase: config.actusRiskHost,
+    actusServerBase: config.actusSimHost,
+  };
+
+  const simResult = await runStimulation(collection, envConfig, "configured");
+
+  // Extract events from ACTUS response
+  const rawSim = simResult.simulation;
+  let events: ACTUSEvent[] = [];
+
+  if (Array.isArray(rawSim) && rawSim.length > 0 && rawSim[0].events) {
+    events = rawSim[0].events;
+  } else if (rawSim && rawSim.events) {
+    events = rawSim.events;
+  }
+
+  if (events.length === 0) {
     return {
       error: "Simulation returned no events",
       simulationId,
-      status: simResult.status,
+      success: simResult.success,
     };
   }
 
   // Compute metrics
-  const metrics = computeMetrics(simResult.events);
+  const metrics = computeMetrics(events);
   const report = formatCREReport(metrics, effectiveScenarioId);
 
   return {
@@ -45,9 +71,9 @@ export async function getMetricsTool(
     },
     simulation: {
       id: simulationId,
-      name: simResult.simulationName,
-      totalEvents: simResult.totalEvents,
-      status: simResult.status,
+      name: simResult.scenarioName,
+      totalEvents: events.length,
+      success: simResult.success,
     },
   };
 }

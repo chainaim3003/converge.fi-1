@@ -1,19 +1,14 @@
 /**
- * GET  /api/portfolios — Lists configured portfolios
- * POST /api/portfolios — (placeholder) Create a portfolio
+ * GET /api/portfolios — Lists configured portfolios from config/portfolios/
  */
 
 import { Router, Request, Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
 import { config } from "../config";
-import { PortfolioConfig } from "../types";
 
 const router = Router();
 
-/**
- * GET /api/portfolios — Returns all configured portfolio definitions.
- */
 router.get("/portfolios", (_req: Request, res: Response) => {
   try {
     const portfoliosDir = config.portfoliosDir;
@@ -24,7 +19,7 @@ router.get("/portfolios", (_req: Request, res: Response) => {
     }
 
     const files = fs.readdirSync(portfoliosDir).filter((f) => f.endsWith(".json"));
-    const portfolios: PortfolioConfig[] = files.map((f) => {
+    const portfolios = files.map((f) => {
       const content = fs.readFileSync(path.join(portfoliosDir, f), "utf-8");
       return JSON.parse(content);
     });

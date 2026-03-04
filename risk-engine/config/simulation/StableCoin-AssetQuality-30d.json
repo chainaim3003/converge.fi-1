@@ -1,0 +1,207 @@
+{
+  "info": {
+    "_postman_id": "sc-aq-30d-001",
+    "name": "StableCoin-AssetQuality-30d",
+    "description": "ACTUS Stablecoin: ASSET QUALITY MODEL (6.4) — HQLA quality degradation under stress.\n\nScenario: SVB-style bank failure + moderate sovereign stress.\n  Issuer: StableCoinA, $100M outstanding supply\n  Custodian bank fails (SVB March 2023 analog): stress 0→0.75→recovery\n  Sovereign stress (debt ceiling/downgrade): stress 0→0.4→recovery\n\nQUALITY DEGRADATION LOGIC:\n  Bank stress >= 0.5 threshold:\n    effectiveQuality = baseQuality × (1 - bankStress)\n    e.g. stress=0.75 → quality drops from 100 to 25\n    SVB: $3.3B technically 'cash' but frozen = quality 0\n\n  Sovereign stress:\n    Max 30% degradation: quality = base × (1 - 0.3 × sovStress)\n    e.g. sovStress=0.4 → quality = 100 × 0.88 = 88\n\n  Floor at qualityFloor=50 (L2B minimum classification)\n  Returns: degradation fraction (0.0–0.5 range)\n\nKEY DYNAMICS:\n  Days 1-8:   Both stresses < threshold → quality=100 → signal=0.0\n  Days 9-12:  Bank stress crosses 0.5 → quality begins degrading\n  Days 13-17: Sovereign stress rises → additional quality pressure\n  Day 18-19:  Peak: bankStress=0.75 → quality=25 (clamped to floor=50)\n  Days 20-30: Recovery: stresses subside → quality restores\n\nOpen Postman Console (Ctrl+Alt+C) before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Add BANK_STRESS_INDEX (custodian bank health)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addReferenceIndex",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addReferenceIndex"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorID\":\"SC_BANK_STRESS_01\",\"marketObjectCode\":\"BANK_STRESS_INDEX\",\"base\":1.0,\"data\":[{\"time\":\"2026-03-01T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-02T00:00:00\",\"value\":0.02},{\"time\":\"2026-03-03T00:00:00\",\"value\":0.05},{\"time\":\"2026-03-04T00:00:00\",\"value\":0.08},{\"time\":\"2026-03-05T00:00:00\",\"value\":0.12},{\"time\":\"2026-03-06T00:00:00\",\"value\":0.18},{\"time\":\"2026-03-07T00:00:00\",\"value\":0.25},{\"time\":\"2026-03-08T00:00:00\",\"value\":0.35},{\"time\":\"2026-03-09T00:00:00\",\"value\":0.45},{\"time\":\"2026-03-10T00:00:00\",\"value\":0.52},{\"time\":\"2026-03-11T00:00:00\",\"value\":0.55},{\"time\":\"2026-03-12T00:00:00\",\"value\":0.58},{\"time\":\"2026-03-13T00:00:00\",\"value\":0.62},{\"time\":\"2026-03-14T00:00:00\",\"value\":0.65},{\"time\":\"2026-03-15T00:00:00\",\"value\":0.68},{\"time\":\"2026-03-16T00:00:00\",\"value\":0.72},{\"time\":\"2026-03-17T00:00:00\",\"value\":0.74},{\"time\":\"2026-03-18T00:00:00\",\"value\":0.75},{\"time\":\"2026-03-19T00:00:00\",\"value\":0.73},{\"time\":\"2026-03-20T00:00:00\",\"value\":0.68},{\"time\":\"2026-03-21T00:00:00\",\"value\":0.60},{\"time\":\"2026-03-22T00:00:00\",\"value\":0.50},{\"time\":\"2026-03-23T00:00:00\",\"value\":0.42},{\"time\":\"2026-03-24T00:00:00\",\"value\":0.35},{\"time\":\"2026-03-25T00:00:00\",\"value\":0.28},{\"time\":\"2026-03-26T00:00:00\",\"value\":0.20},{\"time\":\"2026-03-27T00:00:00\",\"value\":0.15},{\"time\":\"2026-03-28T00:00:00\",\"value\":0.10},{\"time\":\"2026-03-29T00:00:00\",\"value\":0.05},{\"time\":\"2026-03-30T00:00:00\",\"value\":0.02}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('BANK_STRESS_INDEX added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 SC_BANK_STRESS_01: 0.0 \\u2192 0.75 peak (SVB analog) \\u2192 0.02 recovery');",
+        "    console.log('   Crosses 0.5 threshold at day 10 (quality degradation begins)');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "2. Add US_SOVEREIGN_STRESS (treasury market stress)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addReferenceIndex",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addReferenceIndex"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorID\":\"SC_SOV_STRESS_01\",\"marketObjectCode\":\"US_SOVEREIGN_STRESS\",\"base\":1.0,\"data\":[{\"time\":\"2026-03-01T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-02T00:00:00\",\"value\":0.0},{\"time\":\"2026-03-03T00:00:00\",\"value\":0.01},{\"time\":\"2026-03-04T00:00:00\",\"value\":0.02},{\"time\":\"2026-03-05T00:00:00\",\"value\":0.03},{\"time\":\"2026-03-06T00:00:00\",\"value\":0.05},{\"time\":\"2026-03-07T00:00:00\",\"value\":0.07},{\"time\":\"2026-03-08T00:00:00\",\"value\":0.10},{\"time\":\"2026-03-09T00:00:00\",\"value\":0.12},{\"time\":\"2026-03-10T00:00:00\",\"value\":0.15},{\"time\":\"2026-03-11T00:00:00\",\"value\":0.18},{\"time\":\"2026-03-12T00:00:00\",\"value\":0.22},{\"time\":\"2026-03-13T00:00:00\",\"value\":0.28},{\"time\":\"2026-03-14T00:00:00\",\"value\":0.32},{\"time\":\"2026-03-15T00:00:00\",\"value\":0.35},{\"time\":\"2026-03-16T00:00:00\",\"value\":0.38},{\"time\":\"2026-03-17T00:00:00\",\"value\":0.40},{\"time\":\"2026-03-18T00:00:00\",\"value\":0.40},{\"time\":\"2026-03-19T00:00:00\",\"value\":0.38},{\"time\":\"2026-03-20T00:00:00\",\"value\":0.35},{\"time\":\"2026-03-21T00:00:00\",\"value\":0.30},{\"time\":\"2026-03-22T00:00:00\",\"value\":0.25},{\"time\":\"2026-03-23T00:00:00\",\"value\":0.20},{\"time\":\"2026-03-24T00:00:00\",\"value\":0.15},{\"time\":\"2026-03-25T00:00:00\",\"value\":0.10},{\"time\":\"2026-03-26T00:00:00\",\"value\":0.07},{\"time\":\"2026-03-27T00:00:00\",\"value\":0.05},{\"time\":\"2026-03-28T00:00:00\",\"value\":0.03},{\"time\":\"2026-03-29T00:00:00\",\"value\":0.01},{\"time\":\"2026-03-30T00:00:00\",\"value\":0.0}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('US_SOVEREIGN_STRESS added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 SC_SOV_STRESS_01: 0.0 \\u2192 0.40 peak \\u2192 0.0 recovery');",
+        "    console.log('   Max 30% T-bill quality degradation: 0.4 stress \\u2192 12% degradation');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "3. Add AssetQualityModel (aq_sc01)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addAssetQualityModel",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addAssetQualityModel"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorId\":\"aq_sc01\",\"bankStressIndexMOC\":\"BANK_STRESS_INDEX\",\"sovereignStressMOC\":\"US_SOVEREIGN_STRESS\",\"bankStressThreshold\":0.5,\"baseQuality\":100.0,\"qualityFloor\":50.0,\"sovereignMaxDegradation\":0.30,\"monitoringEventTimes\":[\"2026-03-01T00:00:00\",\"2026-03-02T00:00:00\",\"2026-03-03T00:00:00\",\"2026-03-04T00:00:00\",\"2026-03-05T00:00:00\",\"2026-03-06T00:00:00\",\"2026-03-07T00:00:00\",\"2026-03-08T00:00:00\",\"2026-03-09T00:00:00\",\"2026-03-10T00:00:00\",\"2026-03-11T00:00:00\",\"2026-03-12T00:00:00\",\"2026-03-13T00:00:00\",\"2026-03-14T00:00:00\",\"2026-03-15T00:00:00\",\"2026-03-16T00:00:00\",\"2026-03-17T00:00:00\",\"2026-03-18T00:00:00\",\"2026-03-19T00:00:00\",\"2026-03-20T00:00:00\",\"2026-03-21T00:00:00\",\"2026-03-22T00:00:00\",\"2026-03-23T00:00:00\",\"2026-03-24T00:00:00\",\"2026-03-25T00:00:00\",\"2026-03-26T00:00:00\",\"2026-03-27T00:00:00\",\"2026-03-28T00:00:00\",\"2026-03-29T00:00:00\",\"2026-03-30T00:00:00\"]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('AssetQualityModel added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    console.log('\\u2705 aq_sc01: AssetQualityModel (daily monitoring, 30 days)');",
+        "    console.log('   bankStressThreshold=0.5, baseQuality=100, qualityFloor=50');",
+        "    console.log('   sovereignMaxDegradation=0.30 (30% max T-bill degradation)');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "4. Add AssetQuality Scenario",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addScenario",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addScenario"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"scenarioID\":\"sc_asset_quality_scn01\",\"riskFactorDescriptors\":[{\"riskFactorID\":\"SC_BANK_STRESS_01\",\"riskFactorType\":\"ReferenceIndex\"},{\"riskFactorID\":\"SC_SOV_STRESS_01\",\"riskFactorType\":\"ReferenceIndex\"},{\"riskFactorID\":\"aq_sc01\",\"riskFactorType\":\"AssetQualityModel\"}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('AssetQuality scenario created', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 sc_asset_quality_scn01: 2 indexes + 1 behavioral model');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "5a. Verify AssetQualityModel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findAssetQualityModel/aq_sc01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findAssetQualityModel", "aq_sc01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('AssetQualityModel verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data.riskFactorId).to.eql('aq_sc01');",
+        "    pm.expect(data.bankStressThreshold).to.eql(0.5);",
+        "    pm.expect(data.baseQuality).to.eql(100.0);",
+        "    console.log('\\u2705 aq_sc01 confirmed: bankThresh=' + data.bankStressThreshold + ', base=' + data.baseQuality + ', floor=' + data.qualityFloor);",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "5b. Verify Scenario",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findScenario/sc_asset_quality_scn01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findScenario", "sc_asset_quality_scn01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('Scenario verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    var types = data.riskFactorDescriptors.map(function(d){return d.riskFactorType;});",
+        "    pm.expect(types).to.include('AssetQualityModel');",
+        "    console.log('\\u2705 Scenario descriptors: ' + JSON.stringify(types));",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "6. Run AssetQuality Simulation",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8083/rf2/scenarioSimulation",
+          "protocol": "http",
+          "host": ["localhost:8083"],
+          "path": ["rf2", "scenarioSimulation"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"contracts\":[{\"calendar\":\"NC\",\"businessDayConvention\":\"SCF\",\"contractType\":\"PAM\",\"statusDate\":\"2026-02-28T00:00:00\",\"contractRole\":\"RPA\",\"contractID\":\"StableCoinA-AQ-01\",\"cycleAnchorDateOfInterestPayment\":\"2026-03-31T00:00:00\",\"cycleOfInterestPayment\":\"P1ML0\",\"nominalInterestRate\":0.0,\"dayCountConvention\":\"30E360\",\"currency\":\"USD\",\"contractDealDate\":\"2026-02-28T00:00:00\",\"initialExchangeDate\":\"2026-03-01T00:00:00\",\"maturityDate\":\"2026-03-31T00:00:00\",\"notionalPrincipal\":100000000,\"premiumDiscountAtIED\":0,\"stablecoinModels\":[\"aq_sc01\"]}],\"scenarioDescriptor\":{\"scenarioID\":\"sc_asset_quality_scn01\",\"scenarioType\":\"scenario\"},\"simulateTo\":\"2026-03-31T00:00:00\",\"monitoringTimes\":[]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('AssetQuality simulation', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data[0].status).to.eql('Success');",
+        "    var events = data[0].events;",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "    console.log('ASSET QUALITY MODEL (6.4) \\u2014 HQLA QUALITY DEGRADATION');",
+        "    console.log('  Bank stress: 0.0 \\u2192 0.75 (SVB analog) \\u2192 recovery');",
+        "    console.log('  Sovereign stress: 0.0 \\u2192 0.40 peak \\u2192 recovery');",
+        "    console.log('  L1=100 \\u2192 degraded under stress \\u2192 floor=50 (L2B)');",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "    console.log('Total events: ' + events.length);",
+        "    var counts = {};",
+        "    events.forEach(function(e){counts[e.type]=(counts[e.type]||0)+1;});",
+        "    Object.keys(counts).forEach(function(k){console.log('  '+k+': '+counts[k]);});",
+        "    console.log('');",
+        "    var mrds = events.filter(function(e){return e.type==='MRD';});",
+        "    if(mrds.length > 0){",
+        "        console.log('\\u2550\\u2550 QUALITY DEGRADATION EVENTS \\u2550\\u2550');",
+        "        mrds.forEach(function(m){",
+        "            console.log('  '+m.time+' degradation='+m.payoff.toFixed(4));",
+        "        });",
+        "    }",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "});",
+        "pm.test('Events generated', function(){",
+        "    var data = pm.response.json();",
+        "    pm.expect(data[0].events.length).to.be.above(0);",
+        "});"
+      ]}}]
+    }
+  ]
+}

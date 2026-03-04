@@ -3,21 +3,24 @@
  *
  * This is the endpoint that CRE workflows call:
  *   CRE Workflow → httpClient.sendRequest() → POST /api/v1/cre-report
- *   → risk-engine runs ACTUS simulation
- *   → computes metrics from events (PP, MRD, IED, MD)
+ *   → risk-engine loads Postman collection
+ *   → StimulationRunner executes steps against ACTUS 8082/8083
+ *   → computeMetrics extracts CRE metrics from events
  *   → returns CRE-formatted JSON for on-chain encoding
  */
 
 import { Router, Request, Response } from "express";
-import { ACTUSClient } from "../api/ACTUSClient";
+import * as fs from "fs";
+import * as path from "path";
+import { config } from "../config";
+import { runStimulation } from "../api/StimulationRunner";
+import type { EnvironmentConfig } from "../api/StimulationRunner";
 import { computeMetrics, formatCREReport } from "../metrics/computeMetrics";
 import { isValidCREReportRequest } from "../utils/validation";
-import { CREReportResponse } from "../types";
+import type { ACTUSEvent, CREReportResponse } from "../types";
 
 const router = Router();
-const actusClient = new ACTUSClient();
 
-// Default simulation for CRE workflow if none specified
 const DEFAULT_SIMULATION = "StableCoin-BackingRatio-RedemptionPressure-30d";
 
 router.post("/v1/cre-report", async (req: Request, res: Response) => {
@@ -33,36 +36,64 @@ router.post("/v1/cre-report", async (req: Request, res: Response) => {
   try {
     console.log(`[cre-report] Running simulation: ${simulationId}`);
 
-    // 1. Run the ACTUS simulation
-    const simResult = await actusClient.runSimulation(simulationId);
+    // 1. Load the Postman collection
+    const filePath = path.join(config.simulationsDir, `${simulationId}.json`);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: `Simulation not found: ${simulationId}` });
+      return;
+    }
+    const collection = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 
-    if (simResult.events.length === 0) {
+    // 2. Execute via StimulationRunner
+    const envConfig: EnvironmentConfig = {
+      riskServiceBase: config.actusRiskHost,
+      actusServerBase: config.actusSimHost,
+    };
+    const simResult = await runStimulation(collection, envConfig, "configured");
+
+    // 3. Extract events from ACTUS response
+    //    ACTUS /rf2/scenarioSimulation returns [{contractId, contractType, events: [...]}]
+    const rawSimulation = simResult.simulation;
+    let events: ACTUSEvent[] = [];
+    let contractId: string | undefined;
+    let contractType: string | undefined;
+
+    if (Array.isArray(rawSimulation) && rawSimulation.length > 0 && rawSimulation[0].events) {
+      events = rawSimulation[0].events;
+      contractId = rawSimulation[0].contractId;
+      contractType = rawSimulation[0].contractType;
+    } else if (rawSimulation && rawSimulation.events) {
+      events = rawSimulation.events;
+      contractId = rawSimulation.contractId;
+      contractType = rawSimulation.contractType;
+    }
+
+    if (events.length === 0) {
       res.status(500).json({
         error: "Simulation returned no events",
         simulationId,
-        steps: simResult.steps,
+        simulationSuccess: simResult.success,
+        steps: simResult.steps.map((s) => ({ step: s.step, name: s.name, status: s.status })),
       });
       return;
     }
 
-    // 2. Compute metrics from events
+    // 4. Compute metrics from events
     const params = req.body.params || {};
-    const metrics = computeMetrics(simResult.events, params);
+    const metrics = computeMetrics(events, params);
 
-    // 3. Format as CRE report
+    // 5. Format as CRE report
     const report = formatCREReport(metrics, scenarioId);
 
-    // 4. Build response
-    const ppEvents = simResult.events.filter(
-      (e) => e.type === "PP" && Math.abs(e.payoff) > 0
-    );
+    // 6. Build response
+    const ppEvents = events.filter((e) => e.type === "PP" && Math.abs(e.payoff) > 0);
 
     const response: CREReportResponse = {
       report,
       simulation: {
         id: simulationId,
-        name: simResult.simulationName,
-        totalEvents: simResult.totalEvents,
+        name: simResult.scenarioName,
+        totalEvents: events.length,
         ppEvents: ppEvents.length,
         peakRedemption: metrics.peakDayRedemption,
         finalNominalValue: metrics.finalNominalValue,

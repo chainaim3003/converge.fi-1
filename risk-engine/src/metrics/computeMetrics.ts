@@ -1,24 +1,20 @@
 /**
  * computeMetrics — Converts ACTUS simulation events → CRE report metrics.
  *
- * From CLAUDE.md section 7.3:
- *   Input: ACTUS simulation returns events (verified 63 for BackingRatio sim)
- *   Filter PP events with non-zero payoff (redemptions)
- *   Compute:
- *     backingRatioBps = (totalReserves / totalSupply) * 10000
- *     liquidityRatioBps = (cashReserves / totalSupply) * 10000
- *     riskScore = weighted composite (0-100)
- *     maturityGapDays = days until next T-bill maturity (treasury sim only)
+ * v2 additions:
+ *   - computeConcentrationHHI: Herfindahl-Hirschman Index from multi-contract event groups
+ *   - computeAssetQualityScore: weighted reserve quality from contractId patterns + IED notionals
+ *   - computeMetrics now accepts ContractGroup[] for multi-contract simulations
  *
  * Event types:
  *   PP  = behavioral model redemption outputs
  *   MRD = behavioral model risk metric outputs
- *   IED = initial exchange date
- *   MD  = maturity date
+ *   IED = initial exchange date (carries initial notional)
+ *   MD  = maturity date — contract end
  *   IP  = interest payment
  */
 
-import { ACTUSEvent, ComputedMetrics, CREReport } from "../types";
+import { ACTUSEvent, ComputedMetrics, CREReport, ContractGroup } from "../types";
 
 /** Initial parameters for a stablecoin simulation */
 interface SimulationParams {
@@ -38,10 +34,18 @@ const DEFAULT_PARAMS: SimulationParams = {
 
 /**
  * Compute all risk metrics from an ACTUS event stream.
+ *
+ * @param events     Flattened events from all contracts (PP events drive redemption metrics)
+ * @param params     Optional override for initial simulation parameters
+ * @param contractGroups  Optional: full per-contract event groups for HHI + quality computation.
+ *                        When provided (multi-contract simulation), concentrationHHI and
+ *                        assetQualityScore are computed from actual contract notionals and IDs.
+ *                        When absent (single-contract), safe defaults are used.
  */
 export function computeMetrics(
   events: ACTUSEvent[],
-  params: Partial<SimulationParams> = {}
+  params: Partial<SimulationParams> = {},
+  contractGroups: ContractGroup[] = []
 ): ComputedMetrics {
   const p = { ...DEFAULT_PARAMS, ...params };
 
@@ -67,8 +71,7 @@ export function computeMetrics(
   // Current supply = initial - total redeemed
   const totalSupply = Math.max(1, p.initialNotional - redemptionTotal);
 
-  // Reserves decrease proportionally but less (reserves > supply for backed coins)
-  // Simplified model: reserves lose the same amount as redemptions
+  // Reserves decrease proportionally (simplified: reserves lose same amount as redemptions)
   const totalReserves = Math.max(0, p.initialReserves - redemptionTotal);
 
   // Cash decreases by redemptions first (cash is used for payouts)
@@ -81,11 +84,22 @@ export function computeMetrics(
   // Compute composite risk score (0-100)
   const riskScore = computeRiskScore(backingRatioBps, liquidityRatioBps, peakDayRedemption, p);
 
+  // v2: Concentration HHI and Asset Quality from contractGroups
+  const concentrationHHI = contractGroups.length > 0
+    ? computeConcentrationHHI(contractGroups)
+    : 0;
+
+  const assetQualityScore = contractGroups.length > 0
+    ? computeAssetQualityScore(contractGroups)
+    : 75; // neutral default when no contract detail available
+
   return {
     backingRatioBps: clamp(backingRatioBps, 0, 30000),
     liquidityRatioBps: clamp(liquidityRatioBps, 0, 10000),
     riskScore: clamp(riskScore, 0, 100),
-    maturityGapDays: 0, // Only set for treasury simulations
+    maturityGapDays: computeMaturityGapDays(contractGroups),
+    concentrationHHI: clamp(concentrationHHI, 0, 10000),
+    assetQualityScore: clamp(assetQualityScore, 0, 100),
 
     totalReserves,
     totalSupply,
@@ -99,6 +113,7 @@ export function computeMetrics(
 
 /**
  * Format computed metrics as a CRE report ready for on-chain encoding.
+ * v2: includes concentrationHHI and assetQualityScore.
  */
 export function formatCREReport(metrics: ComputedMetrics, scenarioId: string): CREReport {
   return {
@@ -108,8 +123,181 @@ export function formatCREReport(metrics: ComputedMetrics, scenarioId: string): C
     maturityGapDays: metrics.maturityGapDays,
     timestamp: Math.floor(Date.now() / 1000),
     scenarioId,
+    concentrationHHI: metrics.concentrationHHI,
+    assetQualityScore: metrics.assetQualityScore,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════
+// v2: CONCENTRATION HHI (Herfindahl-Hirschman Index)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Compute Herfindahl-Hirschman Index from multi-contract simulation.
+ *
+ * HHI = sum of (share_i)^2, scaled to 0-10000.
+ *   10000 = monopoly (single asset = 100% of reserves)
+ *   ~2500 = moderate concentration (4 equal assets)
+ *   1000  = low concentration (10 equal assets)
+ *
+ * Asset contracts are identified by positive IED nominalValue.
+ * Liability contracts (negative IED) are excluded.
+ */
+export function computeConcentrationHHI(contractGroups: ContractGroup[]): number {
+  // Get initial notional from IED event for each contract
+  const notionals: number[] = [];
+
+  for (const group of contractGroups) {
+    const iedEvent = group.events.find((e) => e.type === "IED");
+    if (!iedEvent) continue;
+
+    const notional = iedEvent.nominalValue;
+
+    // Skip liability contracts (negative notional in ACTUS PAM IED)
+    // Also skip if contractId suggests it's a liability
+    const id = group.contractId.toLowerCase();
+    if (
+      notional < 0 ||
+      id.includes("liab") ||
+      id.includes("stablecoin") ||
+      id.includes("liability")
+    ) {
+      continue;
+    }
+
+    if (notional > 0) {
+      notionals.push(Math.abs(notional));
+    }
+  }
+
+  if (notionals.length === 0) return 0;
+
+  const total = notionals.reduce((sum, n) => sum + n, 0);
+  if (total === 0) return 0;
+
+  // HHI = sum of (share_i)^2, scaled to 0-10000
+  const hhi = notionals.reduce((sum, n) => {
+    const share = n / total;
+    return sum + share * share;
+  }, 0) * 10000;
+
+  return Math.round(hhi);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v2: ASSET QUALITY SCORE
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Compute weighted asset quality score (0-100) from contractId patterns and IED notionals.
+ *
+ * Quality tiers (matching CLAUDE.md section 14 criteria):
+ *   cash / usdc / usdt       → 100 (instantly liquid, risk-free)
+ *   tbill / treasury / govt  → 95  (near-riskfree, highly liquid)
+ *   bond / corp              → 70  (investment grade, less liquid)
+ *   other / unknown assets   → 60  (unclassified)
+ *   liab / stablecoin        → skip (not an asset)
+ */
+export function computeAssetQualityScore(contractGroups: ContractGroup[]): number {
+  const scored: Array<{ notional: number; score: number }> = [];
+
+  for (const group of contractGroups) {
+    const iedEvent = group.events.find((e) => e.type === "IED");
+    if (!iedEvent) continue;
+
+    const notional = Math.abs(iedEvent.nominalValue);
+    if (notional === 0) continue;
+
+    const id = group.contractId.toLowerCase();
+
+    // Skip liabilities
+    if (
+      iedEvent.nominalValue < 0 ||
+      id.includes("liab") ||
+      id.includes("stablecoin") ||
+      id.includes("liability")
+    ) {
+      continue;
+    }
+
+    // Determine quality score from contractId pattern
+    let score: number;
+    if (id.includes("cash") || id.includes("usdc") || id.includes("usdt")) {
+      score = 100;
+    } else if (
+      id.includes("tbill") ||
+      id.includes("treasury") ||
+      id.includes("govt") ||
+      id.includes("treas")
+    ) {
+      score = 95;
+    } else if (
+      id.includes("corp") ||
+      id.includes("bond") ||
+      id.includes("note")
+    ) {
+      score = 70;
+    } else {
+      score = 60; // unclassified asset
+    }
+
+    scored.push({ notional, score });
+  }
+
+  if (scored.length === 0) return 75; // neutral default
+
+  const totalNotional = scored.reduce((sum, c) => sum + c.notional, 0);
+  if (totalNotional === 0) return 75;
+
+  const weightedScore = scored.reduce(
+    (sum, c) => sum + (c.score * c.notional) / totalNotional,
+    0
+  );
+
+  return Math.round(weightedScore);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MATURITY GAP (days until nearest T-bill maturity)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Compute days until the nearest asset contract maturity (MD event).
+ * For treasury-backed stablecoins, this is the maturity ladder metric.
+ * Returns 0 if no maturity events found (non-treasury simulation).
+ */
+function computeMaturityGapDays(contractGroups: ContractGroup[]): number {
+  if (contractGroups.length === 0) return 0;
+
+  const now = Date.now();
+  let nearestMaturityMs = Infinity;
+
+  for (const group of contractGroups) {
+    const id = group.contractId.toLowerCase();
+    // Only look at asset contracts (skip liabilities)
+    if (id.includes("liab") || id.includes("stablecoin") || id.includes("liability")) {
+      continue;
+    }
+
+    for (const event of group.events) {
+      if (event.type === "MD") {
+        const maturityMs = new Date(event.time).getTime();
+        if (maturityMs > now && maturityMs < nearestMaturityMs) {
+          nearestMaturityMs = maturityMs;
+        }
+      }
+    }
+  }
+
+  if (nearestMaturityMs === Infinity) return 0;
+
+  const daysRemaining = Math.ceil((nearestMaturityMs - now) / (1000 * 60 * 60 * 24));
+  return Math.max(0, daysRemaining);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPOSITE RISK SCORE
+// ═══════════════════════════════════════════════════════════════
 
 /**
  * Compute weighted composite risk score (0-100).
@@ -127,10 +315,12 @@ function computeRiskScore(
   params: SimulationParams
 ): number {
   // Backing risk: 0 at 120%+, 100 at 80% or below
-  const backingRisk = backingBps >= 12000 ? 0 : Math.min(100, ((12000 - backingBps) / 4000) * 100);
+  const backingRisk =
+    backingBps >= 12000 ? 0 : Math.min(100, ((12000 - backingBps) / 4000) * 100);
 
   // Liquidity risk: 0 at 35%+, 100 at 0%
-  const liquidityRisk = liquidityBps >= 3500 ? 0 : Math.min(100, ((3500 - liquidityBps) / 3500) * 100);
+  const liquidityRisk =
+    liquidityBps >= 3500 ? 0 : Math.min(100, ((3500 - liquidityBps) / 3500) * 100);
 
   // Redemption velocity risk: peak day as % of supply
   const velocityRatio = peakDayRedemption / params.initialNotional;
@@ -149,6 +339,10 @@ function computeRiskScore(
 
   return Math.round(score);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
 
 /**
  * Group events by calendar day for daily aggregation.

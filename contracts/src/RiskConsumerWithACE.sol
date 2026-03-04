@@ -9,54 +9,62 @@ import {RiskScorePolicy} from "./policies/RiskScorePolicy.sol";
 
 /**
  * @title RiskConsumerWithACE
- * @notice The "mailbox" contract. Receives signed risk reports from CRE workflows
- *         via Chainlink ACE (Autonomous Contract Execution), decodes them using
- *         RiskReportExtractor, and fans out the metrics to the 3 policy contracts.
+ * @notice Receives signed risk reports from CRE workflows via the Chainlink
+ *         KeystoneForwarder, decodes them, and fans out metrics to the three
+ *         policy contracts that gate ConvergeStablecoin.mint().
+ *
+ * IReceiver interface requirement (Chainlink CRE):
+ *   The Chainlink KeystoneForwarder validates DON signatures then calls:
+ *     onReport(bytes calldata metadata, bytes calldata report)
+ *
+ *   - `metadata` carries workflow provenance: workflowName (bytes10),
+ *     workflowOwner (address), reportName (bytes2).
+ *     Source: https://docs.chain.link/cre/guides/workflow/using-evm-client/onchain-write/overview-go
+ *   - `report`   carries the ABI-encoded risk payload written by the CRE workflow.
+ *
+ * We declare the two-argument signature directly rather than importing
+ * IReceiver from @chainlink/contracts (not installed) to keep dependencies
+ * minimal while remaining fully compliant.
  *
  * Data flow:
- *   CRE Workflow (off-chain)
- *     → runtime.report(abi.encode(backingBps, liqBps, score, gap, ts, scenarioId))
+ *   CRE workflow (off-chain)
+ *     → runtime.report(hexToBase64(encodeAbiParameters(...)))
  *     → evmClient.writeReport(this address)
- *     → onReport() called by Chainlink DON
- *     → decode → update BackingRatioPolicy, LiquidityRatioPolicy, RiskScorePolicy
- *     → ConvergeStablecoin.mint() reads those policies (no further off-chain calls)
- *
- * The CRE workflow that produces these reports:
- *   1. httpClient.sendRequest() → POST risk-engine/api/v1/cre-report
- *   2. risk-engine runs ACTUS simulation (10-step pipeline on ports 8082/8083)
- *   3. Computes metrics from simulation events (PP/MRD/IED/MD events)
- *   4. Returns { backingRatioBps, liquidityRatioBps, riskScore, maturityGapDays }
- *   5. CRE signs and writes to this contract
- *
- * Report history is stored for audit trail (dashboard reads via events + getReport).
+ *     → KeystoneForwarder verifies DON signatures
+ *     → onReport(metadata, report) called here
+ *     → RiskReportExtractor.decode(report)
+ *     → backingPolicy.update() / liquidityPolicy.update() / riskScorePolicy.update()
+ *     → ConvergeStablecoin.mint() reads stored policy state (no off-chain calls)
  */
 contract RiskConsumerWithACE is Ownable {
     using RiskReportExtractor for bytes;
 
     // ─── Policy contracts ───
-    BackingRatioPolicy public backingPolicy;
+    BackingRatioPolicy  public backingPolicy;
     LiquidityRatioPolicy public liquidityPolicy;
-    RiskScorePolicy public riskScorePolicy;
+    RiskScorePolicy     public riskScorePolicy;
 
     // ─── Report storage (audit trail) ───
     uint256 public reportCount;
     mapping(uint256 => RiskReportExtractor.RiskReport) public reports;
 
-    // ─── Latest state (convenience reads for dashboard) ───
+    // ─── Latest state (dashboard reads) ───
     RiskReportExtractor.RiskReport public latestReport;
 
     // ─── Access control ───
-    /// @notice Address of the CRE DON forwarder that can write reports.
+    /// @notice Address of the Chainlink KeystoneForwarder on this network.
+    ///         Production Sepolia: see https://docs.chain.link/cre/guides/workflow/using-evm-client/forwarder-directory
+    ///         Simulation: set to msg.sender (deployer) for `cre workflow simulate`.
     address public creForwarder;
 
-    // ─── Events (dashboard reads these) ───
+    // ─── Events ───
     event ReportReceived(
         uint256 indexed reportIndex,
-        uint16 backingRatioBps,
-        uint16 liquidityRatioBps,
-        uint8 riskScore,
-        uint8 maturityGapDays,
-        uint40 timestamp,
+        uint16  backingRatioBps,
+        uint16  liquidityRatioBps,
+        uint8   riskScore,
+        uint8   maturityGapDays,
+        uint40  timestamp,
         bytes32 scenarioId
     );
 
@@ -66,6 +74,7 @@ contract RiskConsumerWithACE is Ownable {
         bool riskScoreHealthy
     );
 
+    // ─── Errors ───
     error OnlyCreForwarder(address caller, address expected);
     error PoliciesNotSet();
 
@@ -80,50 +89,65 @@ contract RiskConsumerWithACE is Ownable {
         creForwarder = _creForwarder;
     }
 
-    // ─── Policy registration (called once after deployment) ───
+    // ─── Policy registration ───
 
     function setPolicies(
         address _backingPolicy,
         address _liquidityPolicy,
         address _riskScorePolicy
     ) external onlyOwner {
-        backingPolicy = BackingRatioPolicy(_backingPolicy);
+        backingPolicy  = BackingRatioPolicy(_backingPolicy);
         liquidityPolicy = LiquidityRatioPolicy(_liquidityPolicy);
         riskScorePolicy = RiskScorePolicy(_riskScorePolicy);
     }
 
-    // ─── Core: receive CRE report ───
+    // ─── IReceiver: receive CRE report ───
 
     /**
-     * @notice Called by CRE DON forwarder when a new signed report arrives.
-     *         Decodes the report, stores it, and updates all 3 policy contracts.
-     * @param reportData The abi.encoded risk report payload from CRE workflow.
+     * @notice Called by the Chainlink KeystoneForwarder after it validates
+     *         the DON's aggregate signature on the report.
+     *
+     * @param metadata  Workflow provenance bytes (workflowName, workflowOwner,
+     *                  reportName). Not decoded here — kept for ABI compliance.
+     * @param report    ABI-encoded risk payload: abi.encode(uint16, uint16,
+     *                  uint8, uint8, uint40, bytes32). Matches the encoding
+     *                  produced by the CRE workflow via encodeAbiParameters.
+     *
+     * Source: Chainlink CRE docs — IReceiver interface:
+     *   https://docs.chain.link/cre/guides/workflow/using-evm-client/onchain-write/overview-go
+     *   "onReport(bytes metadata, bytes report)"
      */
-    function onReport(bytes calldata reportData) external onlyCreForwarder {
+    function onReport(
+        bytes calldata metadata,
+        bytes calldata report
+    ) external onlyCreForwarder {
+        // silence unused-variable warning for metadata
+        metadata;
+
         if (address(backingPolicy) == address(0)) revert PoliciesNotSet();
 
-        // Decode using the library
-        RiskReportExtractor.RiskReport memory report = reportData.decode();
+        // Decode risk metrics from the CRE-signed report payload
+        RiskReportExtractor.RiskReport memory decoded = report.decode();
 
         // Store for audit trail
         uint256 idx = reportCount;
-        reports[idx] = report;
-        latestReport = report;
+        reports[idx] = decoded;
+        latestReport = decoded;
         reportCount = idx + 1;
 
         // Fan out to policy contracts
-        backingPolicy.update(report.backingRatioBps, report.timestamp);
-        liquidityPolicy.update(report.liquidityRatioBps, report.timestamp);
-        riskScorePolicy.update(report.riskScore, report.timestamp);
+        backingPolicy.update(decoded.backingRatioBps, decoded.timestamp);
+        liquidityPolicy.update(decoded.liquidityRatioBps, decoded.timestamp);
+        riskScorePolicy.update(decoded.riskScore, decoded.timestamp);
 
         emit ReportReceived(
             idx,
-            report.backingRatioBps,
-            report.liquidityRatioBps,
-            report.riskScore,
-            report.maturityGapDays,
-            report.timestamp,
-            report.scenarioId
+            decoded.backingRatioBps,
+            decoded.liquidityRatioBps,
+            decoded.riskScore,
+            decoded.maturityGapDays,
+            decoded.timestamp,
+            decoded.scenarioId
         );
 
         emit PoliciesUpdated(
@@ -133,19 +157,19 @@ contract RiskConsumerWithACE is Ownable {
         );
     }
 
-    // ─── Read helpers (for dashboard + AI chat) ───
+    // ─── Read helpers ───
 
     /**
-     * @notice Returns full health status in one call (saves RPC calls for dashboard).
+     * @notice Returns full system health in one call (minimises dashboard RPC calls).
      */
     function getSystemHealth() external view returns (
         uint16 backingRatioBps,
         uint16 liquidityRatioBps,
-        uint8 riskScore,
-        uint8 maturityGapDays,
-        bool backingHealthy,
-        bool liquidityHealthy,
-        bool riskScoreHealthy,
+        uint8  riskScore,
+        uint8  maturityGapDays,
+        bool   backingHealthy,
+        bool   liquidityHealthy,
+        bool   riskScoreHealthy,
         uint40 lastUpdated
     ) {
         RiskReportExtractor.RiskReport memory r = latestReport;
@@ -162,9 +186,12 @@ contract RiskConsumerWithACE is Ownable {
     }
 
     /**
-     * @notice Get a specific historical report by index.
+     * @notice Retrieve a specific historical report by index.
      */
-    function getReport(uint256 index) external view returns (RiskReportExtractor.RiskReport memory) {
+    function getReport(uint256 index)
+        external view
+        returns (RiskReportExtractor.RiskReport memory)
+    {
         return reports[index];
     }
 

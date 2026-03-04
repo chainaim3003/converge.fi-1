@@ -1,141 +1,157 @@
 /**
- * ACTUSDataProcessor — Event stream processing utilities.
- *
- * Processes raw ACTUS simulation events into structured data
- * suitable for dashboard charts and panels.
+ * ====================================================================
+ * ACTUS Data Processor - Modular Post-Processing Logic
+ * ====================================================================
+ * Extracts and modularizes the post-processing logic from working tests
+ * Converts raw ACTUS API responses into period-based formatted data
+ * Used by both old and new verification tests for consistency
+ * ====================================================================
  */
 
-import { ACTUSEvent, ACTUSEventType } from "../types";
+// =================================== Core Response Debugging ===================================
 
-/** Processed event with parsed time */
-export interface ProcessedEvent extends ACTUSEvent {
-  parsedTime: Date;
-  dayIndex: number;    // 0-based day from start
+/**
+ * Print the core ACTUS response for debugging
+ * This shows exactly what the ACTUS API is returning
+ */
+export function printCoreACTUSResponse(rawResponse: any, apiUrl: string): void {
+    console.log('\n=== CORE ACTUS API RESPONSE DEBUG ===');
+    console.log(`API URL: ${apiUrl}`);
+    console.log(`Response Status: ${rawResponse.status || 'Unknown'}`);
+    console.log(`Response Headers: ${JSON.stringify(rawResponse.headers || {}, null, 2)}`);
+    
+    const data = rawResponse.data || rawResponse;
+    console.log('\n--- Raw Response Data Structure ---');
+    console.log(`Type: ${typeof data}`);
+    console.log(`Keys: ${Object.keys(data || {})}`);
+    
+    if (data) {
+        console.log('\n--- Raw Data Sample ---');
+        console.log(JSON.stringify(data, null, 2));
+        
+        // Specific checks for common ACTUS response patterns
+        if (data.inflow) console.log(`Inflow periods: ${Array.isArray(data.inflow) ? data.inflow.length : 'Not array'}`);
+        if (data.outflow) console.log(`Outflow periods: ${Array.isArray(data.outflow) ? data.outflow.length : 'Not array'}`);
+        if (data.monthsCount !== undefined) console.log(`Months count: ${data.monthsCount}`);
+        if (data.periodsCount !== undefined) console.log(`Periods count: ${data.periodsCount}`);
+        if (data.contractDetails) console.log(`Contract details: ${Array.isArray(data.contractDetails) ? data.contractDetails.length : 'Not array'} contracts`);
+    }
+    
+    console.log('=== END CORE ACTUS RESPONSE DEBUG ===\n');
 }
 
-/** Daily summary for charts */
-export interface DailySummary {
-  date: string;
-  day: number;
-  nominalValue: number;
-  totalRedemption: number;
-  eventCount: number;
-  riskMetric?: number;
+// =================================== Post-Processing Logic ===================================
+
+/**
+ * Interface for processed ACTUS event data (from working test)
+ */
+interface ACTUSEvent {
+    time: string;
+    payoff: number;
+}
+
+interface ACTUSContract {
+    id: string;
+    contractId: string;
+    type: string;
+    events: ACTUSEvent[];
 }
 
 /**
- * Filter events by type.
+ * Process raw ACTUS JSON data using the EXACT logic from working test
+ * This preserves the period calculation and [0]-init + .push() array pattern
  */
-export function filterByType(events: ACTUSEvent[], type: ACTUSEventType): ACTUSEvent[] {
-  return events.filter((e) => e.type === type);
-}
-
-/**
- * Process raw events: parse times, compute day indices.
- */
-export function processEvents(events: ACTUSEvent[]): ProcessedEvent[] {
-  if (events.length === 0) return [];
-
-  const startTime = new Date(events[0].time).getTime();
-  const msPerDay = 24 * 60 * 60 * 1000;
-
-  return events.map((event) => {
-    const parsedTime = new Date(event.time);
-    const dayIndex = Math.floor((parsedTime.getTime() - startTime) / msPerDay);
-    return { ...event, parsedTime, dayIndex };
-  });
-}
-
-/**
- * Aggregate events into daily summaries for charts.
- */
-export function computeDailySummaries(events: ACTUSEvent[]): DailySummary[] {
-  const processed = processEvents(events);
-  if (processed.length === 0) return [];
-
-  const dailyMap = new Map<number, ProcessedEvent[]>();
-  for (const event of processed) {
-    const existing = dailyMap.get(event.dayIndex) || [];
-    existing.push(event);
-    dailyMap.set(event.dayIndex, existing);
-  }
-
-  const summaries: DailySummary[] = [];
-  const days = Array.from(dailyMap.keys()).sort((a, b) => a - b);
-
-  for (const day of days) {
-    const dayEvents = dailyMap.get(day)!;
-    const ppEvents = dayEvents.filter((e) => e.type === "PP" && Math.abs(e.payoff) > 0);
-    const lastEvent = dayEvents[dayEvents.length - 1];
-
-    summaries.push({
-      date: dayEvents[0].time.substring(0, 10),
-      day,
-      nominalValue: lastEvent.nominalValue,
-      totalRedemption: ppEvents.reduce((sum, e) => sum + Math.abs(e.payoff), 0),
-      eventCount: dayEvents.length,
+export function processRawACTUSData(rawData: any): {
+    inflow: number[][];
+    outflow: number[][];
+    monthsCount: number;
+    contractDetails: any[];
+} {
+    console.log('\n=== PROCESSING RAW ACTUS DATA ===');
+    console.log('Raw data type:', typeof rawData);
+    
+    // Parse the data if it's a string, or use directly if it's already an array
+    let parsedData: ACTUSContract[];
+    if (typeof rawData === 'string') {
+        parsedData = JSON.parse(rawData);
+    } else if (Array.isArray(rawData)) {
+        parsedData = rawData;
+    } else {
+        throw new Error('Invalid ACTUS data format - expected string or array');
+    }
+    
+    console.log(`Parsed ${parsedData.length} contracts`);
+    parsedData.forEach((contract, i) => {
+        console.log(`Contract ${i}: ${contract.contractId} (${contract.type || 'unknown'}) with ${contract.events?.length || 0} events`);
     });
-  }
-
-  return summaries;
-}
-
-/**
- * Extract key trajectory points for the risk timeline.
- * Identifies when thresholds are crossed.
- */
-export function extractTrajectoryPoints(
-  events: ACTUSEvent[],
-  initialNotional: number = 100_000_000
-): Array<{ day: number; date: string; label: string; nominalValue: number }> {
-  const processed = processEvents(events);
-  const points: Array<{ day: number; date: string; label: string; nominalValue: number }> = [];
-
-  if (processed.length === 0) return points;
-
-  // IED event
-  const ied = processed.find((e) => e.type === "IED");
-  if (ied) {
-    points.push({
-      day: ied.dayIndex,
-      date: ied.time.substring(0, 10),
-      label: "Contract initialized",
-      nominalValue: ied.nominalValue,
+    
+    // Extract all dates to calculate the date range (EXACT logic from working test)
+    const allDates = parsedData.flatMap(contract => 
+        contract.events?.map(event => new Date(event.time)) || []
+    );
+    
+    if (allDates.length === 0) {
+        console.log('⚠️ No events found in contracts');
+        return {
+            inflow: [],
+            outflow: [],
+            monthsCount: 0,
+            contractDetails: []
+        };
+    }
+    
+    const minDate = new Date(Math.min(...allDates.map(date => date.getTime())));
+    const maxDate = new Date(Math.max(...allDates.map(date => date.getTime())));
+    
+    // Calculate months count (EXACT logic from working test)
+    const monthsCount = Math.max(
+        (maxDate.getFullYear() - minDate.getFullYear()) * 12 + (maxDate.getMonth() - minDate.getMonth()) + 1,
+        1
+    );
+    
+    console.log(`Date range: ${minDate.toISOString()} to ${maxDate.toISOString()}`);
+    console.log(`Calculated ${monthsCount} periods`);
+    
+    // Initialize arrays (EXACT logic from working test - [0] init + .push())
+    const inflow: number[][] = Array.from({ length: monthsCount }, () => [0]);
+    const outflow: number[][] = Array.from({ length: monthsCount }, () => [0]);
+    
+    // Process events into inflow/outflow arrays (EXACT logic from working test)
+    parsedData.forEach((contract: ACTUSContract) => {
+        contract.events?.forEach((event: ACTUSEvent) => {
+            const date = new Date(event.time);
+            const monthIndex = (date.getFullYear() - minDate.getFullYear()) * 12 + (date.getMonth() - minDate.getMonth());
+            
+            if (monthIndex >= 0 && monthIndex < monthsCount) {
+                if (event.payoff > 0) {
+                    inflow[monthIndex].push(event.payoff);
+                } else if (event.payoff < 0) {
+                    outflow[monthIndex].push(Math.abs(event.payoff));
+                }
+            }
+        });
     });
-  }
-
-  // First redemption
-  const firstPP = processed.find((e) => e.type === "PP" && Math.abs(e.payoff) > 0);
-  if (firstPP) {
-    points.push({
-      day: firstPP.dayIndex,
-      date: firstPP.time.substring(0, 10),
-      label: "First redemption triggered",
-      nominalValue: firstPP.nominalValue,
+    
+    // Build contract detail summary
+    const contractDetails = parsedData.map((c, i) => ({
+        contractId: c.contractId,
+        contractIndex: i,
+        eventCount: (c.events || []).length,
+        totalPayoff: (c.events || []).reduce((sum, e) => sum + e.payoff, 0)
+    }));
+    
+    console.log('Post-processing complete:');
+    console.log(`- Inflow periods: ${inflow.length}`);
+    console.log(`- Outflow periods: ${outflow.length}`);
+    
+    // Debug: show sample data
+    console.log('- Sample inflow data:');
+    inflow.slice(0, 3).forEach((period, i) => {
+        const total = period.reduce((sum, val) => sum + val, 0);
+        console.log(`  Period ${i}: ${period.length} events, total: ${total}`);
     });
-  }
-
-  // 50% supply destruction
-  const halfPoint = processed.find((e) => e.nominalValue <= initialNotional * 0.5);
-  if (halfPoint) {
-    points.push({
-      day: halfPoint.dayIndex,
-      date: halfPoint.time.substring(0, 10),
-      label: "50% supply destroyed",
-      nominalValue: halfPoint.nominalValue,
-    });
-  }
-
-  // MD event
-  const md = processed.find((e) => e.type === "MD");
-  if (md) {
-    points.push({
-      day: md.dayIndex,
-      date: md.time.substring(0, 10),
-      label: "Maturity reached",
-      nominalValue: md.nominalValue,
-    });
-  }
-
-  return points;
+    
+    console.log('=== END PROCESSING RAW ACTUS DATA ===\n');
+    
+    return { inflow, outflow, monthsCount, contractDetails };
 }

@@ -21,8 +21,8 @@ export const config = {
   /** Node environment */
   nodeEnv: process.env.NODE_ENV || "development",
 
-  /** Path to simulation JSON files */
-  simulationsDir: path.resolve(__dirname, "../simulations"),
+  /** Path to simulation Postman collection JSON files */
+  simulationsDir: path.resolve(__dirname, "../config/simulation"),
 
   /** Path to portfolio configs */
   portfoliosDir: path.resolve(__dirname, "../config/portfolios"),

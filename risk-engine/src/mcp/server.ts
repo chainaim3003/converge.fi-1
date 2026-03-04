@@ -11,14 +11,10 @@
  *   - getMetrics: Compute CRE report metrics from a simulation run
  */
 
-import { ACTUSClient } from "../api/ACTUSClient";
-import { computeMetrics, formatCREReport } from "../metrics/computeMetrics";
 import { listSimulationsTool } from "./tools/listSimulations";
 import { runSimulationTool } from "./tools/runSimulation";
 import { describeSimulationTool } from "./tools/describeSimulation";
 import { getMetricsTool } from "./tools/getMetrics";
-
-const actusClient = new ACTUSClient();
 
 interface MCPRequest {
   jsonrpc: "2.0";
@@ -113,16 +109,16 @@ async function handleRequest(request: MCPRequest): Promise<MCPResponse> {
 
         switch (toolName) {
           case "listSimulations":
-            result = listSimulationsTool(actusClient);
+            result = listSimulationsTool();
             break;
           case "runSimulation":
-            result = await runSimulationTool(actusClient, args.simulationId);
+            result = await runSimulationTool(args.simulationId);
             break;
           case "describeSimulation":
-            result = describeSimulationTool(actusClient, args.simulationId);
+            result = describeSimulationTool(args.simulationId);
             break;
           case "getMetrics":
-            result = await getMetricsTool(actusClient, args.simulationId, args.scenarioId);
+            result = await getMetricsTool(args.simulationId, args.scenarioId);
             break;
           default:
             return {
@@ -164,7 +160,6 @@ async function main() {
   process.stdin.on("data", async (chunk: string) => {
     buffer += chunk;
 
-    // Process complete JSON-RPC messages (newline-delimited)
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
 

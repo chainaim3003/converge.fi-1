@@ -23,7 +23,26 @@ async function main() {
   console.log("Deploying contracts with account:", deployer.address);
   console.log("Account balance:", (await deployer.provider.getBalance(deployer.address)).toString());
 
-  // CRE Forwarder address — set via env or use deployer for local testing
+  // CRE Forwarder address — MUST be set via CRE_FORWARDER_ADDRESS env var.
+  //
+  // For `cre workflow simulate` (local simulation):
+  //   The CRE CLI uses a MockForwarder — set CRE_FORWARDER_ADDRESS to your
+  //   deployer wallet address so it can call onReport() directly during testing.
+  //
+  // For production Sepolia (real DON):
+  //   Get the address from: https://docs.chain.link/cre/guides/workflow/using-evm-client/forwarder-directory
+  //   Look under: Testnets → Ethereum Sepolia
+  //
+  // We fall back to deployer.address ONLY for local hardhat node runs.
+  // On sepolia: never deploy without CRE_FORWARDER_ADDRESS set.
+  const network = await ethers.provider.getNetwork();
+  const isSepolia = Number(network.chainId) === 11155111;
+  if (isSepolia && !process.env.CRE_FORWARDER_ADDRESS) {
+    throw new Error(
+      "CRE_FORWARDER_ADDRESS must be set in .env when deploying to Sepolia.\n" +
+      "Get the address from: https://docs.chain.link/cre/guides/workflow/using-evm-client/forwarder-directory"
+    );
+  }
   const creForwarderAddress = process.env.CRE_FORWARDER_ADDRESS || deployer.address;
   console.log("CRE Forwarder address:", creForwarderAddress);
 
@@ -93,7 +112,6 @@ async function main() {
   console.log("   Done.");
 
   // ─── Save deployed addresses ───
-  const network = await ethers.provider.getNetwork();
   const addresses = {
     network: network.name,
     chainId: Number(network.chainId),

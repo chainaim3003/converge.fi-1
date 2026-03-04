@@ -1,219 +1,118 @@
 /**
- * StableCoinVerifier — 6-step verification logic.
- *
- * Verifies that a stablecoin simulation ran correctly by checking:
- *  1. Reference indexes were stored (8082)
- *  2. Behavioral models were stored (8082)
- *  3. Scenario was stored (8082)
- *  4. Simulation ran successfully (8083)
- *  5. Expected event types are present
- *  6. Metrics are within valid ranges
+ * StableCoin Verifier - Main Verification Logic
+ * Simplified verification without ZK programs or network implementation
  */
 
-import axios from "axios";
-import { config } from "../config";
-import { VerificationResult, VerificationStep, ACTUSEvent } from "../types";
-import { ACTUSClient } from "../api/ACTUSClient";
-import { computeMetrics } from "../metrics/computeMetrics";
+import { ACTUSClient } from '../api/ACTUSClient.js';
+import { processStableCoinData, calculateRiskMetrics } from '../utils/metrics.js';
+import { validateStableCoinData, generateSummary } from '../utils/validation.js';
+import type { VerificationParams, VerificationResult } from '../types/index.js';
 
 export class StableCoinVerifier {
-  private actusClient: ACTUSClient;
-
-  constructor() {
-    this.actusClient = new ACTUSClient();
-  }
-
-  async verify(simulationId: string): Promise<VerificationResult> {
-    const steps: VerificationStep[] = [];
-    let allPass = true;
-
-    // Step 1: Check ACTUS Risk Service is reachable
-    steps.push(await this.step1_checkRiskService());
-
-    // Step 2: Check ACTUS Simulation Engine is reachable
-    steps.push(await this.step2_checkSimEngine());
-
-    // Step 3: Verify simulation file exists and is parseable
-    steps.push(this.step3_verifySimulationFile(simulationId));
-
-    // Step 4: Run the simulation
-    let events: ACTUSEvent[] = [];
-    const step4 = await this.step4_runSimulation(simulationId);
-    steps.push(step4.step);
-    events = step4.events;
-
-    // Step 5: Verify expected event types
-    steps.push(this.step5_verifyEventTypes(events));
-
-    // Step 6: Verify computed metrics are valid
-    steps.push(this.step6_verifyMetrics(events));
-
-    allPass = steps.every((s) => s.status === "pass");
-
-    return {
-      simulationId,
-      overall: allPass ? "pass" : "fail",
-      steps,
-      executedAt: new Date().toISOString(),
-    };
-  }
-
-  private async step1_checkRiskService(): Promise<VerificationStep> {
-    try {
-      const resp = await axios.get(`${config.actusRiskHost}/`, { timeout: 5000 });
-      return {
-        step: 1,
-        name: "ACTUS Risk Service reachable",
-        status: resp.status === 200 ? "pass" : "fail",
-        details: `Status ${resp.status} from ${config.actusRiskHost}`,
-      };
-    } catch (e: any) {
-      return {
-        step: 1,
-        name: "ACTUS Risk Service reachable",
-        status: "fail",
-        details: `Cannot reach ${config.actusRiskHost}: ${e.message}`,
-      };
-    }
-  }
-
-  private async step2_checkSimEngine(): Promise<VerificationStep> {
-    try {
-      const resp = await axios.get(`${config.actusSimHost}/`, { timeout: 5000 });
-      return {
-        step: 2,
-        name: "ACTUS Simulation Engine reachable",
-        status: resp.status === 200 ? "pass" : "fail",
-        details: `Status ${resp.status} from ${config.actusSimHost}`,
-      };
-    } catch (e: any) {
-      return {
-        step: 2,
-        name: "ACTUS Simulation Engine reachable",
-        status: "fail",
-        details: `Cannot reach ${config.actusSimHost}: ${e.message}`,
-      };
-    }
-  }
-
-  private step3_verifySimulationFile(simulationId: string): VerificationStep {
-    try {
-      const desc = this.actusClient.describeSimulation(simulationId);
-      return {
-        step: 3,
-        name: "Simulation file valid",
-        status: "pass",
-        details: `${desc.info.name} — ${desc.steps.length} steps in ${desc.info.domain} domain`,
-      };
-    } catch (e: any) {
-      return {
-        step: 3,
-        name: "Simulation file valid",
-        status: "fail",
-        details: e.message,
-      };
-    }
-  }
-
-  private async step4_runSimulation(simulationId: string): Promise<{
-    step: VerificationStep;
-    events: ACTUSEvent[];
-  }> {
-    try {
-      const result = await this.actusClient.runSimulation(simulationId);
-      return {
-        step: {
-          step: 4,
-          name: "Simulation executed",
-          status: result.status === "success" ? "pass" : "fail",
-          details: `${result.totalEvents} events, ${result.steps.length} steps executed`,
-        },
-        events: result.events,
-      };
-    } catch (e: any) {
-      return {
-        step: {
-          step: 4,
-          name: "Simulation executed",
-          status: "fail",
-          details: e.message,
-        },
-        events: [],
-      };
-    }
-  }
-
-  private step5_verifyEventTypes(events: ACTUSEvent[]): VerificationStep {
-    if (events.length === 0) {
-      return {
-        step: 5,
-        name: "Event types present",
-        status: "fail",
-        details: "No events returned from simulation",
-      };
-    }
-
-    const types = new Set(events.map((e) => e.type));
-    const hasIED = types.has("IED");
-    const hasMD = types.has("MD");
-    const hasPP = types.has("PP");
-
-    const missing: string[] = [];
-    if (!hasIED) missing.push("IED");
-    if (!hasMD) missing.push("MD");
-    if (!hasPP) missing.push("PP");
-
-    return {
-      step: 5,
-      name: "Event types present",
-      status: missing.length === 0 ? "pass" : "fail",
-      details:
-        missing.length === 0
-          ? `All expected types found: ${Array.from(types).join(", ")}`
-          : `Missing event types: ${missing.join(", ")}`,
-    };
-  }
-
-  private step6_verifyMetrics(events: ACTUSEvent[]): VerificationStep {
-    if (events.length === 0) {
-      return {
-        step: 6,
-        name: "Metrics valid",
-        status: "skip",
-        details: "Skipped — no events to compute metrics from",
-      };
-    }
+  /**
+   * Execute StableCoin risk verification
+   */
+  async verify(params: VerificationParams): Promise<VerificationResult> {
+    console.log('🎯 StableCoin Risk Verification');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     try {
-      const metrics = computeMetrics(events);
-      const issues: string[] = [];
+      // Display configuration
+      this.displayConfiguration(params);
 
-      if (metrics.backingRatioBps < 0 || metrics.backingRatioBps > 30000) {
-        issues.push(`backingRatioBps out of range: ${metrics.backingRatioBps}`);
-      }
-      if (metrics.liquidityRatioBps < 0 || metrics.liquidityRatioBps > 10000) {
-        issues.push(`liquidityRatioBps out of range: ${metrics.liquidityRatioBps}`);
-      }
-      if (metrics.riskScore < 0 || metrics.riskScore > 100) {
-        issues.push(`riskScore out of range: ${metrics.riskScore}`);
+      // Step 1: Load portfolio
+      console.log('\n📁 Loading portfolio...');
+      const contracts = await ACTUSClient.loadPortfolio(params.portfolioPath);
+      
+      if (contracts.length === 0) {
+        throw new Error('Portfolio contains no contracts');
       }
 
-      return {
-        step: 6,
-        name: "Metrics valid",
-        status: issues.length === 0 ? "pass" : "fail",
-        details:
-          issues.length === 0
-            ? `backing=${metrics.backingRatioBps}bps, liquidity=${metrics.liquidityRatioBps}bps, score=${metrics.riskScore}`
-            : issues.join("; "),
+      // Display contract breakdown
+      this.displayContractBreakdown(contracts);
+
+      // Step 2: Fetch ACTUS data
+      console.log('\n🌐 Fetching ACTUS data...');
+      const actusClient = new ACTUSClient(params.actusUrl);
+      const actusResponse = await actusClient.fetchCashFlowData(contracts);
+
+      // Step 3: Process StableCoin data
+      const stableCoinData = processStableCoinData(
+        actusResponse,
+        contracts,
+        params.backingRatioThreshold,
+        params.liquidityRatioThreshold,
+        params.concentrationLimit,
+        params.qualityThreshold
+      );
+
+      // Step 4: Validate data integrity
+      validateStableCoinData(stableCoinData);
+
+      // Step 5: Calculate risk metrics
+      const riskMetrics = calculateRiskMetrics(stableCoinData);
+
+      // Step 6: Generate summary
+      const summary = generateSummary(
+        'STABLECOIN_PORTFOLIO',
+        riskMetrics,
+        stableCoinData
+      );
+
+      // Create verification result
+      const result: VerificationResult = {
+        success: true,
+        compliant: riskMetrics.overallCompliant,
+        riskMetrics,
+        summary,
+        timestamp: new Date().toISOString()
       };
-    } catch (e: any) {
-      return {
-        step: 6,
-        name: "Metrics valid",
-        status: "fail",
-        details: `Metric computation error: ${e.message}`,
-      };
+
+      return result;
+
+    } catch (error: any) {
+      console.error('\n❌ Verification failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Display verification configuration
+   */
+  private displayConfiguration(params: VerificationParams): void {
+    console.log('📊 Configuration:');
+    console.log(`   Backing Ratio Threshold: ${params.backingRatioThreshold}%`);
+    console.log(`   Liquidity Ratio Threshold: ${params.liquidityRatioThreshold}%`);
+    console.log(`   Concentration Limit: ${params.concentrationLimit}%`);
+    console.log(`   Quality Threshold: ${params.qualityThreshold}`);
+    console.log(`   ACTUS URL: ${params.actusUrl}`);
+    console.log(`   Portfolio Path: ${params.portfolioPath}`);
+  }
+
+  /**
+   * Display contract breakdown by type
+   */
+  private displayContractBreakdown(contracts: any[]): void {
+    const assets = contracts.filter(c => c.contractRole === 'RPA');
+    const liabilities = contracts.filter(c => c.contractRole === 'RPL');
+
+    console.log('\n📋 Contract Breakdown:');
+    console.log(`   Total Contracts: ${contracts.length}`);
+    console.log(`   Assets (RPA): ${assets.length}`);
+    console.log(`   Liabilities (RPL): ${liabilities.length}`);
+
+    // Breakdown by reserve type for assets
+    if (assets.length > 0) {
+      const cash = assets.filter(c => c.reserveType === 'cash').length;
+      const treasury = assets.filter(c => c.reserveType === 'treasury').length;
+      const corporate = assets.filter(c => c.reserveType === 'corporate').length;
+      const other = assets.filter(c => !c.reserveType || c.reserveType === 'other').length;
+
+      console.log('\n   Asset Breakdown by Type:');
+      console.log(`     Cash: ${cash}`);
+      console.log(`     Treasury: ${treasury}`);
+      console.log(`     Corporate: ${corporate}`);
+      console.log(`     Other: ${other}`);
     }
   }
 }

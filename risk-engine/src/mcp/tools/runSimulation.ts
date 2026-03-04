@@ -1,34 +1,69 @@
 /**
  * MCP Tool: runSimulation
- * Execute an ACTUS simulation by ID and return events.
+ * Execute an ACTUS simulation by ID via StimulationRunner and return results.
  */
 
-import { ACTUSClient } from "../../api/ACTUSClient";
+import * as fs from "fs";
+import * as path from "path";
+import { config } from "../../config";
+import { runStimulation } from "../../api/StimulationRunner";
+import type { EnvironmentConfig } from "../../api/StimulationRunner";
+import type { ACTUSEvent } from "../../types";
 
-export async function runSimulationTool(client: ACTUSClient, simulationId: string) {
+export async function runSimulationTool(simulationId: string) {
   if (!simulationId) {
     throw new Error("simulationId is required");
   }
 
-  const result = await client.runSimulation(simulationId);
+  const filePath = path.join(config.simulationsDir, `${simulationId}.json`);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Simulation not found: ${simulationId}`);
+  }
+
+  const collection = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+  const envConfig: EnvironmentConfig = {
+    riskServiceBase: config.actusRiskHost,
+    actusServerBase: config.actusSimHost,
+  };
+
+  const result = await runStimulation(collection, envConfig, "configured");
+
+  // Extract events from ACTUS response
+  const rawSim = result.simulation;
+  let events: ACTUSEvent[] = [];
+  let contractId: string | undefined;
+  let contractType: string | undefined;
+
+  if (Array.isArray(rawSim) && rawSim.length > 0 && rawSim[0].events) {
+    events = rawSim[0].events;
+    contractId = rawSim[0].contractId;
+    contractType = rawSim[0].contractType;
+  } else if (rawSim && rawSim.events) {
+    events = rawSim.events;
+    contractId = rawSim.contractId;
+    contractType = rawSim.contractType;
+  }
+
   return {
-    simulationId: result.simulationId,
-    simulationName: result.simulationName,
-    status: result.status,
-    totalEvents: result.totalEvents,
-    contractId: result.contractId,
-    contractType: result.contractType,
+    simulationId,
+    simulationName: result.scenarioName,
+    status: result.success ? "success" : "error",
+    totalEvents: events.length,
+    contractId,
+    contractType,
     eventSummary: {
-      total: result.events.length,
-      byType: countByType(result.events),
+      total: events.length,
+      byType: countByType(events),
     },
     steps: result.steps.map((s) => ({
-      index: s.stepIndex,
+      index: s.step,
       name: s.name,
       status: s.status,
-      success: s.success,
+      httpStatus: s.httpStatus,
     })),
-    executedAt: result.executedAt,
+    totalDurationMs: result.totalDurationMs,
+    executedAt: result.timestamp,
   };
 }
 

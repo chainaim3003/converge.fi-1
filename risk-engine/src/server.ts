@@ -1,18 +1,18 @@
 /**
- * Converge.fi Risk Engine — Express entry point (port 3001).
+ * Converge.fi Risk Engine — Express Server (port 3001)
  *
+ * Single entry point. All route logic lives in ./routes/*.
  * Wraps ACTUS Docker services (8082, 8083) with:
- *  - Simulation listing and execution
- *  - CRE report metric computation
- *  - StableCoin verification
- *  - Portfolio and scenario management
+ *   - Simulation listing and execution (via StimulationRunner)
+ *   - CRE report metric computation (via computeMetrics)
+ *   - Portfolio-based verification (via StableCoinVerifier)
+ *   - Environment management for ACTUS services
  */
 
 import express from "express";
 import cors from "cors";
 import { config } from "./config";
 
-// Routes
 import healthRouter from "./routes/health";
 import simulateRouter from "./routes/simulate";
 import creReportRouter from "./routes/cre-report";
@@ -26,19 +26,18 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// Request logging
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
 // ─── Routes ───
-app.use("/api", healthRouter);       // GET  /api/health
-app.use("/api", simulateRouter);     // GET  /api/simulations, POST /api/run-simulation
-app.use("/api", creReportRouter);    // POST /api/v1/cre-report
-app.use("/api", verifyRouter);       // POST /api/verify
-app.use("/api", portfoliosRouter);   // GET  /api/portfolios
-app.use("/api", scenariosRouter);    // GET  /api/scenarios
+app.use("/api", healthRouter);
+app.use("/api", simulateRouter);
+app.use("/api", creReportRouter);
+app.use("/api", verifyRouter);
+app.use("/api", portfoliosRouter);
+app.use("/api", scenariosRouter);
 
 // ─── Root ───
 app.get("/", (_req, res) => {
@@ -47,10 +46,13 @@ app.get("/", (_req, res) => {
     version: "1.0.0",
     endpoints: {
       health: "GET /api/health",
+      healthFull: "GET /api/health/risk-service?environment=localhost",
       simulations: "GET /api/simulations",
       runSimulation: "POST /api/run-simulation",
+      environments: "GET /api/environments",
       creReport: "POST /api/v1/cre-report",
       verify: "POST /api/verify",
+      thresholds: "GET /api/thresholds/:jurisdiction",
       portfolios: "GET /api/portfolios",
       scenarios: "GET /api/scenarios",
     },

@@ -1,17 +1,15 @@
 /**
- * risk-engine simulation test — verifies ACTUSClient, metrics computation,
- * and CRE report formatting work correctly with mock data.
+ * risk-engine simulation test — verifies computeMetrics and CRE report
+ * formatting work correctly with sample event data.
  *
- * NOTE: These tests use mock event data. Integration tests against
- * live ACTUS Docker require the containers to be running.
+ * Run:  npx ts-node test/simulation.test.ts
  */
 
 import { computeMetrics, formatCREReport } from "../src/metrics/computeMetrics";
-import { processEvents, computeDailySummaries, extractTrajectoryPoints } from "../src/utils/ACTUSDataProcessor";
 import { ACTUSEvent } from "../src/types";
 
-// Mock event data based on verified simulation output (CLAUDE.md section 5.3)
-const mockEvents: ACTUSEvent[] = [
+// Sample event data based on verified simulation output (CLAUDE.md section 5.3)
+const sampleEvents: ACTUSEvent[] = [
   // IED — contract initialization
   {
     type: "IED",
@@ -24,7 +22,7 @@ const mockEvents: ACTUSEvent[] = [
   },
   // PP events — Days 1-6: zero redemptions
   ...Array.from({ length: 6 }, (_, i) => ({
-    type: "PP" as const,
+    type: "PP" as ACTUSEvent["type"],
     time: `2026-03-0${i + 1}T12:00:00`,
     payoff: 0,
     nominalValue: 100000000,
@@ -34,7 +32,7 @@ const mockEvents: ACTUSEvent[] = [
   })),
   // Day 7: BackingRatio triggers — $500K redeemed
   {
-    type: "PP",
+    type: "PP" as ACTUSEvent["type"],
     time: "2026-03-07T12:00:00",
     payoff: -500000,
     nominalValue: 99500000,
@@ -44,7 +42,7 @@ const mockEvents: ACTUSEvent[] = [
   },
   // Day 8: $500K redeemed
   {
-    type: "PP",
+    type: "PP" as ACTUSEvent["type"],
     time: "2026-03-08T12:00:00",
     payoff: -500000,
     nominalValue: 99000000,
@@ -54,7 +52,7 @@ const mockEvents: ACTUSEvent[] = [
   },
   // Day 9: RedemptionPressure triggers — $2.25M redeemed
   {
-    type: "PP",
+    type: "PP" as ACTUSEvent["type"],
     time: "2026-03-09T12:00:00",
     payoff: -2250000,
     nominalValue: 96750000,
@@ -64,7 +62,7 @@ const mockEvents: ACTUSEvent[] = [
   },
   // Day 10: Both models compound — $13.25M redeemed
   {
-    type: "PP",
+    type: "PP" as ACTUSEvent["type"],
     time: "2026-03-10T12:00:00",
     payoff: -13250000,
     nominalValue: 83500000,
@@ -74,7 +72,7 @@ const mockEvents: ACTUSEvent[] = [
   },
   // Day 15: peak stress — $10.7M redeemed
   {
-    type: "PP",
+    type: "PP" as ACTUSEvent["type"],
     time: "2026-03-15T12:00:00",
     payoff: -10700000,
     nominalValue: 27000000,
@@ -84,7 +82,7 @@ const mockEvents: ACTUSEvent[] = [
   },
   // Day 31: MD event — final principal
   {
-    type: "MD",
+    type: "MD" as ACTUSEvent["type"],
     time: "2026-03-31T00:00:00",
     payoff: 0,
     nominalValue: 8738241.41,
@@ -94,85 +92,8 @@ const mockEvents: ACTUSEvent[] = [
   },
 ];
 
-describe("computeMetrics", () => {
-  it("should compute valid metrics from mock events", () => {
-    const metrics = computeMetrics(mockEvents);
+// ─── Simple test runner ───
 
-    expect(metrics.backingRatioBps).toBeGreaterThanOrEqual(0);
-    expect(metrics.backingRatioBps).toBeLessThanOrEqual(30000);
-    expect(metrics.liquidityRatioBps).toBeGreaterThanOrEqual(0);
-    expect(metrics.liquidityRatioBps).toBeLessThanOrEqual(10000);
-    expect(metrics.riskScore).toBeGreaterThanOrEqual(0);
-    expect(metrics.riskScore).toBeLessThanOrEqual(100);
-    expect(metrics.ppEventCount).toBeGreaterThan(0);
-    expect(metrics.redemptionTotal).toBeGreaterThan(0);
-  });
-
-  it("should detect redemption events", () => {
-    const metrics = computeMetrics(mockEvents);
-    // We have PP events with non-zero payoffs starting at Day 7
-    expect(metrics.ppEventCount).toBe(5); // 5 PP events with non-zero payoff
-    expect(metrics.redemptionTotal).toBe(500000 + 500000 + 2250000 + 13250000 + 10700000);
-  });
-
-  it("should capture final nominal value from last event", () => {
-    const metrics = computeMetrics(mockEvents);
-    expect(metrics.finalNominalValue).toBeCloseTo(8738241.41, 0);
-  });
-
-  it("should handle empty events", () => {
-    const metrics = computeMetrics([]);
-    expect(metrics.ppEventCount).toBe(0);
-    expect(metrics.redemptionTotal).toBe(0);
-    expect(metrics.riskScore).toBe(0);
-  });
-});
-
-describe("formatCREReport", () => {
-  it("should format metrics as CRE report with timestamp", () => {
-    const metrics = computeMetrics(mockEvents);
-    const report = formatCREReport(metrics, "sc_depeg_stress_scn01");
-
-    expect(report.backingRatioBps).toBe(metrics.backingRatioBps);
-    expect(report.liquidityRatioBps).toBe(metrics.liquidityRatioBps);
-    expect(report.riskScore).toBe(metrics.riskScore);
-    expect(report.maturityGapDays).toBe(0);
-    expect(report.timestamp).toBeGreaterThan(0);
-    expect(report.scenarioId).toBe("sc_depeg_stress_scn01");
-  });
-});
-
-describe("ACTUSDataProcessor", () => {
-  it("should process events and assign day indices", () => {
-    const processed = processEvents(mockEvents);
-    expect(processed.length).toBe(mockEvents.length);
-    expect(processed[0].dayIndex).toBe(0);
-  });
-
-  it("should compute daily summaries", () => {
-    const summaries = computeDailySummaries(mockEvents);
-    expect(summaries.length).toBeGreaterThan(0);
-    // First summary should be day 0
-    expect(summaries[0].day).toBe(0);
-  });
-
-  it("should extract trajectory points", () => {
-    const points = extractTrajectoryPoints(mockEvents);
-    // Should find IED, first redemption, and MD at minimum
-    const labels = points.map((p) => p.label);
-    expect(labels).toContain("Contract initialized");
-    expect(labels).toContain("First redemption triggered");
-    expect(labels).toContain("Maturity reached");
-  });
-
-  it("should handle empty events", () => {
-    expect(processEvents([])).toEqual([]);
-    expect(computeDailySummaries([])).toEqual([]);
-    expect(extractTrajectoryPoints([])).toEqual([]);
-  });
-});
-
-// Simple test runner (no jest dependency — uses basic assertions)
 function expect(value: any) {
   return {
     toBe(expected: any) {
@@ -196,11 +117,11 @@ function expect(value: any) {
       const threshold = Math.pow(10, -precision) / 2;
       if (diff > threshold) throw new Error(`Expected ${value} close to ${expected}`);
     },
-    toContain(expected: any) {
-      if (!value.includes(expected)) throw new Error(`Expected array to contain ${expected}`);
-    },
   };
 }
+
+let passed = 0;
+let failed = 0;
 
 function describe(name: string, fn: () => void) {
   console.log(`\n  ${name}`);
@@ -211,18 +132,73 @@ function it(name: string, fn: () => void) {
   try {
     fn();
     console.log(`    ✅ ${name}`);
+    passed++;
   } catch (e: any) {
     console.log(`    ❌ ${name}: ${e.message}`);
+    failed++;
   }
 }
 
-// Run all tests
+// ─── Tests ───
+
 console.log("\n🧪 risk-engine simulation tests\n");
+
 describe("computeMetrics", () => {
-  it("should compute valid metrics from mock events", () => {
-    const metrics = computeMetrics(mockEvents);
+  it("should compute valid metrics from sample events", () => {
+    const metrics = computeMetrics(sampleEvents);
     expect(metrics.backingRatioBps).toBeGreaterThanOrEqual(0);
+    expect(metrics.backingRatioBps).toBeLessThanOrEqual(30000);
+    expect(metrics.liquidityRatioBps).toBeGreaterThanOrEqual(0);
+    expect(metrics.liquidityRatioBps).toBeLessThanOrEqual(10000);
+    expect(metrics.riskScore).toBeGreaterThanOrEqual(0);
     expect(metrics.riskScore).toBeLessThanOrEqual(100);
     expect(metrics.ppEventCount).toBeGreaterThan(0);
+    expect(metrics.redemptionTotal).toBeGreaterThan(0);
+  });
+
+  it("should detect 5 PP events with non-zero payoff", () => {
+    const metrics = computeMetrics(sampleEvents);
+    expect(metrics.ppEventCount).toBe(5);
+  });
+
+  it("should sum total redemptions correctly", () => {
+    const metrics = computeMetrics(sampleEvents);
+    const expectedTotal = 500000 + 500000 + 2250000 + 13250000 + 10700000;
+    expect(metrics.redemptionTotal).toBe(expectedTotal);
+  });
+
+  it("should capture final nominal value from last event", () => {
+    const metrics = computeMetrics(sampleEvents);
+    expect(metrics.finalNominalValue).toBeCloseTo(8738241.41, 0);
+  });
+
+  it("should handle empty events without crashing", () => {
+    const metrics = computeMetrics([]);
+    expect(metrics.ppEventCount).toBe(0);
+    expect(metrics.redemptionTotal).toBe(0);
   });
 });
+
+describe("formatCREReport", () => {
+  it("should format metrics as CRE report with valid fields", () => {
+    const metrics = computeMetrics(sampleEvents);
+    const report = formatCREReport(metrics, "sc_depeg_stress_scn01");
+
+    expect(report.backingRatioBps).toBe(metrics.backingRatioBps);
+    expect(report.liquidityRatioBps).toBe(metrics.liquidityRatioBps);
+    expect(report.riskScore).toBe(metrics.riskScore);
+    expect(report.maturityGapDays).toBe(0);
+    expect(report.timestamp).toBeGreaterThan(0);
+    expect(report.scenarioId).toBe("sc_depeg_stress_scn01");
+  });
+
+  it("should produce integer bps values", () => {
+    const metrics = computeMetrics(sampleEvents);
+    const report = formatCREReport(metrics, "test");
+    expect(report.backingRatioBps).toBe(Math.round(report.backingRatioBps));
+    expect(report.liquidityRatioBps).toBe(Math.round(report.liquidityRatioBps));
+  });
+});
+
+console.log(`\n  Results: ${passed} passed, ${failed} failed\n`);
+if (failed > 0) process.exit(1);

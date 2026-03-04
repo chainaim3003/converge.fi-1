@@ -1,0 +1,21 @@
+# project.yaml — Converge.fi CRE project configuration
+#
+# This file configures the CRE CLI for simulation and deployment.
+# Source: https://docs.chain.link/cre/reference/project-configuration
+#
+# Usage:
+#   cre workflow simulate risk-monitoring --target local-simulation --broadcast
+#   cre workflow deploy   risk-monitoring --target staging-settings
+
+# ── Simulation target (local dev — uses MockForwarder, no real DON) ──────────
+local-simulation:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      # Provide your Sepolia RPC URL via env var. Never hardcode.
+      url: ${SEPOLIA_RPC_URL}
+
+# ── Staging / testnet target (real DON on Sepolia) ───────────────────────────
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: ${SEPOLIA_RPC_URL}

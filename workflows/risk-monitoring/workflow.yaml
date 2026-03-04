@@ -1,88 +1,24 @@
-# WF1: Risk Monitoring Workflow
+# NOTE: This file is NOT used by CRE.
 #
-# PRIMARY workflow for Risk & Compliance track.
-# Trigger: Cron schedule (every 1 hour)
-# Action: Call risk-engine → ACTUS simulation → compute metrics → write on-chain
+# CRE workflows are TypeScript compiled to WASM — there is no YAML workflow
+# format. The actual workflow logic is in workflow.ts.
+# The project-level CRE CLI configuration is in project.yaml at the repo root.
 #
-# CRE Docs: https://docs.chain.link/cre
-
-name: "converge-risk-monitoring"
-description: "Automated stablecoin risk monitoring via ACTUS simulations"
-
-trigger:
-  type: cron
-  schedule: "0 * * * *"  # Every hour
-
-actions:
-  # Step 1: Call risk-engine to run ACTUS simulation and compute metrics
-  - name: "fetch-risk-report"
-    type: httpClient.sendRequest
-    config:
-      method: POST
-      url: "${RISK_ENGINE_URL}/api/v1/cre-report"
-      headers:
-        Content-Type: "application/json"
-      body:
-        simulationId: "StableCoin-BackingRatio-RedemptionPressure-30d"
-        scenarioId: "sc_depeg_stress_scn01"
-    output: riskReport
-
-  # Step 2: Extract and validate metrics from risk-engine response
-  - name: "process-metrics"
-    type: runtime.compute
-    config:
-      code: |
-        const report = inputs.riskReport.report;
-        const backingRatioBps = report.backingRatioBps;
-        const liquidityRatioBps = report.liquidityRatioBps;
-        const riskScore = report.riskScore;
-        const maturityGapDays = report.maturityGapDays;
-        const timestamp = report.timestamp;
-        const scenarioId = report.scenarioId;
-
-        return {
-          backingRatioBps,
-          liquidityRatioBps,
-          riskScore,
-          maturityGapDays,
-          timestamp,
-          scenarioId
-        };
-    inputs:
-      riskReport: "${fetch-risk-report.output}"
-    output: metrics
-
-  # Step 3: Sign the report
-  - name: "sign-report"
-    type: runtime.report
-    config:
-      encoding: "abi"
-      types:
-        - { name: "backingRatioBps", type: "uint16" }
-        - { name: "liquidityRatioBps", type: "uint16" }
-        - { name: "riskScore", type: "uint8" }
-        - { name: "maturityGapDays", type: "uint8" }
-        - { name: "timestamp", type: "uint40" }
-        - { name: "scenarioId", type: "bytes32" }
-    inputs:
-      backingRatioBps: "${process-metrics.output.backingRatioBps}"
-      liquidityRatioBps: "${process-metrics.output.liquidityRatioBps}"
-      riskScore: "${process-metrics.output.riskScore}"
-      maturityGapDays: "${process-metrics.output.maturityGapDays}"
-      timestamp: "${process-metrics.output.timestamp}"
-      scenarioId: "${process-metrics.output.scenarioId}"
-    output: signedReport
-
-  # Step 4: Write signed report to RiskConsumerWithACE on Sepolia
-  - name: "write-on-chain"
-    type: evmClient.writeReport
-    config:
-      chain: "ethereum-sepolia"
-      contractAddress: "${RISK_CONSUMER_ADDRESS}"
-      method: "onReport"
-    inputs:
-      report: "${sign-report.output}"
-
-env:
-  RISK_ENGINE_URL: "http://localhost:3001"
-  RISK_CONSUMER_ADDRESS: ""  # Set after deployment
+# The co-located config.json (not this file) is what the CRE CLI reads at
+# simulation/deploy time:
+#   cre workflow simulate risk-monitoring --target local-simulation --broadcast
+#   cre workflow deploy   risk-monitoring --target staging-settings
+#
+# Source: https://docs.chain.link/cre/reference/project-configuration
+#
+# ─── Simulation commands ──────────────────────────────────────────────────────
+# Dry-run (no broadcast):
+#   cd workflows/risk-monitoring
+#   cre workflow simulate --target local-simulation --config config.json workflow.ts
+#
+# With broadcast (writes on-chain via MockForwarder):
+#   cre workflow simulate --target local-simulation --broadcast --config config.json workflow.ts
+#
+# ─── Deploy to Sepolia DON ────────────────────────────────────────────────────
+# After contracts are deployed and config.json has riskConsumerAddress filled in:
+#   cre workflow deploy --target staging-settings --config config.json workflow.ts

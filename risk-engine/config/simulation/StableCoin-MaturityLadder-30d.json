@@ -1,0 +1,182 @@
+{
+  "info": {
+    "_postman_id": "sc-ml-30d-001",
+    "name": "StableCoin-MaturityLadder-30d",
+    "description": "ACTUS Stablecoin: MATURITY LADDER MODEL (6.3) — T-bill roll decision engine.\n\nScenario: Adaptive reserve management during escalating de-peg risk.\n  Issuer: StableCoinA, $100M outstanding supply\n  PEG_RISK_SCORE evolves: 0→50 peak→recovery\n\nDECISION TREE (from MaturityLadderModel.java):\n  Score < 15  → NORMAL_ROLL      (signal=0.0, T-bill renews at current tenor)\n  15 <= < 30  → SHORTEN_TENOR    (signal=0.25, shorten maturity to 4-week)\n  30 <= < 45  → CASH_RETENTION   (signal=0.50, hold as cash, do not roll)\n  Score >= 45 → EMERGENCY_LIQUIDATE (signal=1.0, liquidate all to cash)\n\nKEY DYNAMICS:\n  Days 1-8:   Score 0-12 → all maturities roll normally\n  Days 9-13:  Score 15-28 → tenor shortening begins (26W→4W)\n  Days 14-17: Score 30-44 → cash retention mode (stop all rolling)\n  Day 18-20:  Score 45-50 → emergency: sell T-bills at market\n  Days 21-30: Recovery: score declines → resume normal operations\n\nRegulatory context:\n  GENIUS Act: WAM <= 93 days requirement\n  Cash retention at WAM > 93 triggers regulatory action\n  Emergency liquidation = fire-sale risk on treasury portfolio\n\nOpen Postman Console (Ctrl+Alt+C) before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Add PEG_RISK_SCORE (composite risk index)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addReferenceIndex",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addReferenceIndex"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorID\":\"SC_PEG_RISK_01\",\"marketObjectCode\":\"PEG_RISK_SCORE\",\"base\":1.0,\"data\":[{\"time\":\"2026-03-01T00:00:00\",\"value\":0},{\"time\":\"2026-03-02T00:00:00\",\"value\":2},{\"time\":\"2026-03-03T00:00:00\",\"value\":4},{\"time\":\"2026-03-04T00:00:00\",\"value\":6},{\"time\":\"2026-03-05T00:00:00\",\"value\":8},{\"time\":\"2026-03-06T00:00:00\",\"value\":10},{\"time\":\"2026-03-07T00:00:00\",\"value\":11},{\"time\":\"2026-03-08T00:00:00\",\"value\":12},{\"time\":\"2026-03-09T00:00:00\",\"value\":16},{\"time\":\"2026-03-10T00:00:00\",\"value\":20},{\"time\":\"2026-03-11T00:00:00\",\"value\":24},{\"time\":\"2026-03-12T00:00:00\",\"value\":26},{\"time\":\"2026-03-13T00:00:00\",\"value\":28},{\"time\":\"2026-03-14T00:00:00\",\"value\":32},{\"time\":\"2026-03-15T00:00:00\",\"value\":36},{\"time\":\"2026-03-16T00:00:00\",\"value\":40},{\"time\":\"2026-03-17T00:00:00\",\"value\":44},{\"time\":\"2026-03-18T00:00:00\",\"value\":48},{\"time\":\"2026-03-19T00:00:00\",\"value\":50},{\"time\":\"2026-03-20T00:00:00\",\"value\":48},{\"time\":\"2026-03-21T00:00:00\",\"value\":42},{\"time\":\"2026-03-22T00:00:00\",\"value\":35},{\"time\":\"2026-03-23T00:00:00\",\"value\":28},{\"time\":\"2026-03-24T00:00:00\",\"value\":22},{\"time\":\"2026-03-25T00:00:00\",\"value\":16},{\"time\":\"2026-03-26T00:00:00\",\"value\":12},{\"time\":\"2026-03-27T00:00:00\",\"value\":8},{\"time\":\"2026-03-28T00:00:00\",\"value\":5},{\"time\":\"2026-03-29T00:00:00\",\"value\":3},{\"time\":\"2026-03-30T00:00:00\",\"value\":1}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('PEG_RISK_SCORE added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 SC_PEG_RISK_01: 0 \\u2192 50 peak \\u2192 1 recovery');",
+        "    console.log('   Decision boundaries: <15=ROLL, 15-29=SHORTEN, 30-44=CASH, >=45=LIQUIDATE');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "2. Add MaturityLadderModel (ml_sc01)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addMaturityLadderModel",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addMaturityLadderModel"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"riskFactorId\":\"ml_sc01\",\"pegRiskScoreMOC\":\"PEG_RISK_SCORE\",\"monitoringEventTimes\":[\"2026-03-01T00:00:00\",\"2026-03-02T00:00:00\",\"2026-03-03T00:00:00\",\"2026-03-04T00:00:00\",\"2026-03-05T00:00:00\",\"2026-03-06T00:00:00\",\"2026-03-07T00:00:00\",\"2026-03-08T00:00:00\",\"2026-03-09T00:00:00\",\"2026-03-10T00:00:00\",\"2026-03-11T00:00:00\",\"2026-03-12T00:00:00\",\"2026-03-13T00:00:00\",\"2026-03-14T00:00:00\",\"2026-03-15T00:00:00\",\"2026-03-16T00:00:00\",\"2026-03-17T00:00:00\",\"2026-03-18T00:00:00\",\"2026-03-19T00:00:00\",\"2026-03-20T00:00:00\",\"2026-03-21T00:00:00\",\"2026-03-22T00:00:00\",\"2026-03-23T00:00:00\",\"2026-03-24T00:00:00\",\"2026-03-25T00:00:00\",\"2026-03-26T00:00:00\",\"2026-03-27T00:00:00\",\"2026-03-28T00:00:00\",\"2026-03-29T00:00:00\",\"2026-03-30T00:00:00\"]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('MaturityLadderModel added', function(){",
+        "    pm.response.to.have.status(200);",
+        "    console.log('\\u2705 ml_sc01: MaturityLadderModel (daily monitoring, 30 days)');",
+        "    console.log('   pegRiskScoreMOC=PEG_RISK_SCORE');",
+        "    console.log('   Thresholds: <15=NORMAL_ROLL, 15-29=SHORTEN, 30-44=CASH, >=45=EMERGENCY');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "3. Add MaturityLadder Scenario",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8082/addScenario",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["addScenario"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"scenarioID\":\"sc_maturity_ladder_scn01\",\"riskFactorDescriptors\":[{\"riskFactorID\":\"SC_PEG_RISK_01\",\"riskFactorType\":\"ReferenceIndex\"},{\"riskFactorID\":\"ml_sc01\",\"riskFactorType\":\"MaturityLadderModel\"}]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('MaturityLadder scenario created', function(){",
+        "    pm.response.to.have.status(200);",
+        "    pm.expect(pm.response.text()).to.include('Successfully');",
+        "    console.log('\\u2705 sc_maturity_ladder_scn01: 1 index + 1 behavioral model');",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "4a. Verify MaturityLadderModel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findMaturityLadderModel/ml_sc01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findMaturityLadderModel", "ml_sc01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('MaturityLadderModel verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data.riskFactorId).to.eql('ml_sc01');",
+        "    pm.expect(data.pegRiskScoreMOC).to.eql('PEG_RISK_SCORE');",
+        "    console.log('\\u2705 ml_sc01 confirmed: pegRiskScoreMOC=' + data.pegRiskScoreMOC);",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "4b. Verify Scenario",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/findScenario/sc_maturity_ladder_scn01",
+          "protocol": "http",
+          "host": ["localhost:8082"],
+          "path": ["findScenario", "sc_maturity_ladder_scn01"]
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('Scenario verified', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data.scenarioID).to.eql('sc_maturity_ladder_scn01');",
+        "    var types = data.riskFactorDescriptors.map(function(d){return d.riskFactorType;});",
+        "    pm.expect(types).to.include('MaturityLadderModel');",
+        "    console.log('\\u2705 Scenario descriptors: ' + JSON.stringify(types));",
+        "});"
+      ]}}]
+    },
+    {
+      "name": "5. Run MaturityLadder Simulation",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {
+          "raw": "http://localhost:8083/rf2/scenarioSimulation",
+          "protocol": "http",
+          "host": ["localhost:8083"],
+          "path": ["rf2", "scenarioSimulation"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"contracts\":[{\"calendar\":\"NC\",\"businessDayConvention\":\"SCF\",\"contractType\":\"PAM\",\"statusDate\":\"2026-02-28T00:00:00\",\"contractRole\":\"RPA\",\"contractID\":\"StableCoinA-ML-01\",\"cycleAnchorDateOfInterestPayment\":\"2026-03-31T00:00:00\",\"cycleOfInterestPayment\":\"P1ML0\",\"nominalInterestRate\":0.0,\"dayCountConvention\":\"30E360\",\"currency\":\"USD\",\"contractDealDate\":\"2026-02-28T00:00:00\",\"initialExchangeDate\":\"2026-03-01T00:00:00\",\"maturityDate\":\"2026-03-31T00:00:00\",\"notionalPrincipal\":100000000,\"premiumDiscountAtIED\":0,\"stablecoinModels\":[\"ml_sc01\"]}],\"scenarioDescriptor\":{\"scenarioID\":\"sc_maturity_ladder_scn01\",\"scenarioType\":\"scenario\"},\"simulateTo\":\"2026-03-31T00:00:00\",\"monitoringTimes\":[]}",
+          "options": {"raw": {"language": "json"}}
+        }
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('MaturityLadder simulation', function(){",
+        "    pm.response.to.have.status(200);",
+        "    var data = pm.response.json();",
+        "    pm.expect(data[0].status).to.eql('Success');",
+        "    var events = data[0].events;",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "    console.log('MATURITY LADDER MODEL (6.3) — T-BILL ROLL DECISION ENGINE');",
+        "    console.log('  PEG_RISK_SCORE: 0 \\u2192 50 peak \\u2192 1 recovery');",
+        "    console.log('  Decisions: NORMAL_ROLL(0.0) | SHORTEN(0.25) | CASH(0.50) | LIQUIDATE(1.0)');",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "    console.log('Total events: ' + events.length);",
+        "    var counts = {};",
+        "    events.forEach(function(e){counts[e.type]=(counts[e.type]||0)+1;});",
+        "    Object.keys(counts).forEach(function(k){console.log('  '+k+': '+counts[k]);});",
+        "    console.log('');",
+        "    var mrds = events.filter(function(e){return e.type==='MRD';});",
+        "    if(mrds.length > 0){",
+        "        console.log('\\u2550\\u2550 MATURITY LADDER DECISIONS \\u2550\\u2550');",
+        "        mrds.forEach(function(m){",
+        "            var sig = m.payoff;",
+        "            var decision = sig===0?'NORMAL_ROLL':sig===0.25?'SHORTEN_TENOR':sig===0.5?'CASH_RETENTION':'EMERGENCY_LIQUIDATE';",
+        "            console.log('  '+m.time+' signal='+sig.toFixed(2)+' decision='+decision);",
+        "        });",
+        "    }",
+        "    console.log('\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550\\u2550');",
+        "});",
+        "pm.test('Events generated', function(){",
+        "    var data = pm.response.json();",
+        "    pm.expect(data[0].events.length).to.be.above(0);",
+        "});"
+      ]}}]
+    }
+  ]
+}
