@@ -7,7 +7,10 @@
     "test": "hardhat test",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
-    "node": "hardhat node"
+    "node": "hardhat node",
+    "set-forwarder:simulation": "hardhat run scripts/setForwarder.ts --network sepolia",
+    "set-forwarder:production": "hardhat run scripts/setForwarder.ts --network sepolia",
+    "verify:setup": "hardhat run scripts/verifySetup.ts --network sepolia"
   },
   "keywords": [
     "chainlink",

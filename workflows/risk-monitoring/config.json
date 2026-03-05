@@ -1,7 +1,7 @@
 {
   "schedule": "0 * * * *",
   "riskEngineUrl": "http://localhost:3001",
-  "riskConsumerAddress": "",
+  "riskConsumerAddress": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58",
   "chainName": "ethereum-testnet-sepolia",
   "gasLimit": "500000"
 }

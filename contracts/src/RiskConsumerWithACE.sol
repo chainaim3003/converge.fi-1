@@ -7,34 +7,33 @@ import {BackingRatioPolicy} from "./policies/BackingRatioPolicy.sol";
 import {LiquidityRatioPolicy} from "./policies/LiquidityRatioPolicy.sol";
 import {RiskScorePolicy} from "./policies/RiskScorePolicy.sol";
 
+// IReceiver interface requirement (Chainlink CRE):
+//   The Chainlink KeystoneForwarder validates DON signatures then calls:
+//     onReport(bytes calldata metadata, bytes calldata report)
+//
+//   - `metadata` carries workflow provenance: workflowName (bytes10),
+//     workflowOwner (address), reportName (bytes2).
+//     Source: https://docs.chain.link/cre/guides/workflow/using-evm-client/onchain-write/overview-go
+//   - `report`   carries the ABI-encoded risk payload written by the CRE workflow.
+//
+// We declare the two-argument signature directly to stay compliant with the
+// KeystoneForwarder IReceiver interface without adding extra package dependencies.
+//
+// Data flow:
+//   CRE workflow (off-chain)
+//     -> runtime.report(hexToBase64(encodeAbiParameters(...)))
+//     -> evmClient.writeReport(this address)
+//     -> KeystoneForwarder verifies DON signatures
+//     -> onReport(metadata, report) called here
+//     -> RiskReportExtractor.decode(report)
+//     -> backingPolicy.update() / liquidityPolicy.update() / riskScorePolicy.update()
+//     -> ConvergeStablecoin.mint() reads stored policy state (no off-chain calls)
+
 /**
  * @title RiskConsumerWithACE
  * @notice Receives signed risk reports from CRE workflows via the Chainlink
  *         KeystoneForwarder, decodes them, and fans out metrics to the three
  *         policy contracts that gate ConvergeStablecoin.mint().
- *
- * IReceiver interface requirement (Chainlink CRE):
- *   The Chainlink KeystoneForwarder validates DON signatures then calls:
- *     onReport(bytes calldata metadata, bytes calldata report)
- *
- *   - `metadata` carries workflow provenance: workflowName (bytes10),
- *     workflowOwner (address), reportName (bytes2).
- *     Source: https://docs.chain.link/cre/guides/workflow/using-evm-client/onchain-write/overview-go
- *   - `report`   carries the ABI-encoded risk payload written by the CRE workflow.
- *
- * We declare the two-argument signature directly rather than importing
- * IReceiver from @chainlink/contracts (not installed) to keep dependencies
- * minimal while remaining fully compliant.
- *
- * Data flow:
- *   CRE workflow (off-chain)
- *     → runtime.report(hexToBase64(encodeAbiParameters(...)))
- *     → evmClient.writeReport(this address)
- *     → KeystoneForwarder verifies DON signatures
- *     → onReport(metadata, report) called here
- *     → RiskReportExtractor.decode(report)
- *     → backingPolicy.update() / liquidityPolicy.update() / riskScorePolicy.update()
- *     → ConvergeStablecoin.mint() reads stored policy state (no off-chain calls)
  */
 contract RiskConsumerWithACE is Ownable {
     using RiskReportExtractor for bytes;

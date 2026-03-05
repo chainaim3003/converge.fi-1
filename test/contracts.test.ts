@@ -94,18 +94,20 @@ describe("Converge.fi — Circuit Breaker Tests", function () {
     await stablecoin.setOperator(operator.address, true);
   }
 
-  // Helper: submit a healthy CRE report via the forwarder
+  // Helper: submit a healthy CRE report via the forwarder.
+  // onReport(bytes metadata, bytes report) — two args per the Chainlink IReceiver interface.
+  // "0x" is correct empty bytes for metadata; the contract silences it with `metadata;`.
   async function submitHealthyReport() {
     const ts = await time.latest();
     const reportData = encodeReport(10200, 1500, 30, 0, ts, scenarioId);
-    await riskConsumer.connect(creForwarder).onReport(reportData);
+    await riskConsumer.connect(creForwarder).onReport("0x", reportData);
   }
 
   // Helper: submit a report with specific values
   async function submitReport(backingBps: number, liqBps: number, score: number, gap: number) {
     const ts = await time.latest();
     const reportData = encodeReport(backingBps, liqBps, score, gap, ts, scenarioId);
-    await riskConsumer.connect(creForwarder).onReport(reportData);
+    await riskConsumer.connect(creForwarder).onReport("0x", reportData);
   }
 
   // ════════════════════════════════════════════════════════
@@ -224,14 +226,14 @@ describe("Converge.fi — Circuit Breaker Tests", function () {
       const ts = await time.latest();
       const reportData = encodeReport(10200, 1500, 30, 0, ts, scenarioId);
       await expect(
-        riskConsumer.connect(outsider).onReport(reportData)
+        riskConsumer.connect(outsider).onReport("0x", reportData)
       ).to.be.reverted;
     });
 
     it("should emit ReportReceived event with correct data", async function () {
       const ts = await time.latest();
       const reportData = encodeReport(10200, 1500, 30, 5, ts, scenarioId);
-      await expect(riskConsumer.connect(creForwarder).onReport(reportData))
+      await expect(riskConsumer.connect(creForwarder).onReport("0x", reportData))
         .to.emit(riskConsumer, "ReportReceived")
         .withArgs(0, 10200, 1500, 30, 5, ts, scenarioId);
     });
