@@ -1,21 +1,39 @@
-# project.yaml — Converge.fi CRE project configuration
-#
-# This file configures the CRE CLI for simulation and deployment.
-# Source: https://docs.chain.link/cre/reference/project-configuration
-#
-# Usage:
-#   cre workflow simulate risk-monitoring --target local-simulation --broadcast
-#   cre workflow deploy   risk-monitoring --target staging-settings
-
-# ── Simulation target (local dev — uses MockForwarder, no real DON) ──────────
 local-simulation:
   rpcs:
     - chain-name: ethereum-testnet-sepolia
-      # Provide your Sepolia RPC URL via env var. Never hardcode.
-      url: ${SEPOLIA_RPC_URL}
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
 
-# ── Staging / testnet target (real DON on Sepolia) ───────────────────────────
+maturity-ladder:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+asset-quality:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+compliance-drift:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+concentration-drift:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+early-warning:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+approach3:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
 staging-settings:
   rpcs:
     - chain-name: ethereum-testnet-sepolia
-      url: ${SEPOLIA_RPC_URL}
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc

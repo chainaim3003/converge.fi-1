@@ -64,6 +64,9 @@ export function computeMetrics(
     )
   );
 
+  // Gap 2: log PP extraction and redemption totals
+  console.log(`[computeMetrics] Events: ${events.length} total | PP (redemptions): ${ppEvents.length} | redemptionTotal=${redemptionTotal.toFixed(0)} peakDay=${peakDayRedemption.toFixed(0)}`);
+
   // Final nominal value from the last event (MD or last PP)
   const lastEvent = events[events.length - 1];
   const finalNominalValue = lastEvent?.nominalValue ?? p.initialNotional;
@@ -81,8 +84,14 @@ export function computeMetrics(
   const backingRatioBps = Math.round((totalReserves / totalSupply) * 10000);
   const liquidityRatioBps = Math.round((cashReserves / totalSupply) * 10000);
 
+  // Gap 2: log the key financial figures and computed bps
+  console.log(`[computeMetrics] supply=${totalSupply.toFixed(0)} reserves=${totalReserves.toFixed(0)} cash=${cashReserves.toFixed(0)} | backingBps=${backingRatioBps} liquidityBps=${liquidityRatioBps}`);
+
   // Compute composite risk score (0-100)
   const riskScore = computeRiskScore(backingRatioBps, liquidityRatioBps, peakDayRedemption, p);
+
+  // Gap 2: log the final risk score
+  console.log(`[computeMetrics] riskScore=${riskScore}`);
 
   // v2: Concentration HHI and Asset Quality from contractGroups
   const concentrationHHI = contractGroups.length > 0

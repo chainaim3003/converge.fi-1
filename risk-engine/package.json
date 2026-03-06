@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
+    "server": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "type-check": "tsc --noEmit",
     "clean": "rimraf dist"

@@ -1,24 +1,63 @@
-# NOTE: This file is NOT used by CRE.
-#
-# CRE workflows are TypeScript compiled to WASM — there is no YAML workflow
-# format. The actual workflow logic is in workflow.ts.
-# The project-level CRE CLI configuration is in project.yaml at the repo root.
-#
-# The co-located config.json (not this file) is what the CRE CLI reads at
-# simulation/deploy time:
-#   cre workflow simulate risk-monitoring --target local-simulation --broadcast
-#   cre workflow deploy   risk-monitoring --target staging-settings
-#
-# Source: https://docs.chain.link/cre/reference/project-configuration
-#
-# ─── Simulation commands ──────────────────────────────────────────────────────
-# Dry-run (no broadcast):
-#   cd workflows/risk-monitoring
-#   cre workflow simulate --target local-simulation --config config.json workflow.ts
-#
-# With broadcast (writes on-chain via MockForwarder):
-#   cre workflow simulate --target local-simulation --broadcast --config config.json workflow.ts
-#
-# ─── Deploy to Sepolia DON ────────────────────────────────────────────────────
-# After contracts are deployed and config.json has riskConsumerAddress filled in:
-#   cre workflow deploy --target staging-settings --config config.json workflow.ts
+local-simulation:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config.json"
+    secrets-path: ""
+
+maturity-ladder:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-maturity-ladder.json"
+    secrets-path: ""
+
+asset-quality:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-asset-quality.json"
+    secrets-path: ""
+
+compliance-drift:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-compliance-drift.json"
+    secrets-path: ""
+
+concentration-drift:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-concentration-drift.json"
+    secrets-path: ""
+
+early-warning:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-early-warning.json"
+    secrets-path: ""
+
+approach3:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-approach3.json"
+    secrets-path: ""
+
+staging-settings:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config.json"
+    secrets-path: ""

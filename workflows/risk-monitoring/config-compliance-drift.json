@@ -3,7 +3,7 @@
   "riskEngineUrl": "http://localhost:3001",
   "riskConsumerAddress": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58",
   "stablecoinAddress": "0x8D8131547Ec5Cb2fF1bB941a28fA20e347A928F3",
-  "simulationId": "StableCoin-BackingRatio-RedemptionPressure-30d",
+  "simulationId": "StableCoin-ComplianceDrift-30d",
   "scenarioId": "sc_depeg_stress_scn01",
   "chainName": "ethereum-testnet-sepolia",
   "gasLimit": "500000"
