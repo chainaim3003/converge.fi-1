@@ -1,0 +1,10 @@
+{
+  "schedule": "0 * * * *",
+  "riskEngineUrl": "http://localhost:3001",
+  "riskConsumerAddress": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58",
+  "stablecoinAddress": "0x8D8131547Ec5Cb2fF1bB941a28fA20e347A928F3",
+  "simulationId": "demo-phase-A",
+  "scenarioId": "demo_mint_halt_restore",
+  "chainName": "ethereum-testnet-sepolia",
+  "gasLimit": "500000"
+}

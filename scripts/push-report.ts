@@ -157,6 +157,32 @@ const PRESETS: Record<string, {
     riskScore:         15,     // low risk — all metrics restored
     expectMint:        true,
   },
+
+  // ─── Demo v2 presets (circulating + mint ask supply model) ────────────
+  // Supply = circulatingSupply + mintAsk. Phase A: 0+100K=100K. Phase B/C: 100K+100K=200K.
+  // Key insight: Phase B backing PASSES (207%) but liquidity FAILS (7.2%).
+
+  "demo-healthy-v2": {
+    label:             "DEMO v2 PHASE A — $515K reserves / 100K supply (0 circ + 100K ask), 515% backed → mint ALLOWED",
+    backingRatioBps:   30000,  // 515% clamped to uint16-safe 300% (above 100% threshold)
+    liquidityRatioBps: 2524,   // 25.2% — $130K cash / $515K reserves
+    riskScore:         0,      // all metrics healthy
+    expectMint:        true,
+  },
+  "demo-stressed-v2": {
+    label:             "DEMO v2 PHASE B — $415K reserves / 200K supply, backing 207% PASSES but liquidity 7.2% FAILS → BLOCKED",
+    backingRatioBps:   20750,  // 207.5% — $415K / $200K — PASSES 100% threshold!
+    liquidityRatioBps: 723,    // 7.2% — $30K cash / $415K reserves — FAILS 10% threshold
+    riskScore:         34,     // moderate (concentration penalty) but below 70 threshold
+    expectMint:        false,
+  },
+  "demo-restored-v2": {
+    label:             "DEMO v2 PHASE C — $501K reserves / 200K supply, early liq + injection restores liquidity → mint ALLOWED",
+    backingRatioBps:   25063,  // 250.6% — $501,250 / $200K
+    liquidityRatioBps: 4813,   // 48.1% — $241,250 cash / $501,250 reserves
+    riskScore:         0,      // all metrics restored
+    expectMint:        true,
+  },
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

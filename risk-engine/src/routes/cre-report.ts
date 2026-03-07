@@ -12,11 +12,13 @@
 import { Router, Request, Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
+import axios from "axios";
 import { config } from "../config";
 import { runStimulation } from "../api/StimulationRunner";
 import type { EnvironmentConfig } from "../api/StimulationRunner";
 import { computeMetrics, formatCREReport } from "../metrics/computeMetrics";
 import { isValidCREReportRequest } from "../utils/validation";
+import { readJson, mergePortfolio, computeHealthFromPortfolio } from "../utils/demo-helpers";
 import type { ACTUSEvent, CREReportResponse } from "../types";
 
 const router = Router();
@@ -34,6 +36,17 @@ router.post("/v1/cre-report", async (req: Request, res: Response) => {
 
   const simulationId = req.body.simulationId || DEFAULT_SIMULATION;
   const scenarioId = req.body.scenarioId || "sc_depeg_stress_scn01";
+
+  // ── DEMO MODE: simulationId starts with "demo-" ──────────────────────
+  if (simulationId.startsWith("demo-")) {
+    try {
+      await handleDemoReport(simulationId, scenarioId, res);
+    } catch (error: any) {
+      console.error(`[cre-report] Demo error:`, error.message);
+      res.status(500).json({ error: "Demo report failed", details: error.message });
+    }
+    return;
+  }
 
   try {
     console.log(`[cre-report] Running simulation: ${simulationId}`);
@@ -188,5 +201,121 @@ router.post("/v1/cre-report", async (req: Request, res: Response) => {
     });
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// DEMO MODE HANDLER
+// Called when simulationId starts with "demo-" (e.g. "demo-phase-A")
+// Uses base_portfolio.json + phase overrides from DEMO_DIR
+// Returns the same CREReportResponse shape as the Postman/ACTUS path
+// ══════════════════════════════════════════════════════════════════════
+
+async function handleDemoReport(simulationId: string, scenarioId: string, res: Response) {
+  const demoDir = config.demoDir;
+  if (!demoDir || !fs.existsSync(demoDir)) {
+    res.status(400).json({
+      error: "DEMO_DIR not configured",
+      hint: "Set DEMO_DIR in risk-engine/.env to the iter-fin-demo-2 directory path",
+    });
+    return;
+  }
+
+  // Extract phase from simulationId: "demo-phase-A" → "A"
+  const phase = simulationId.replace("demo-phase-", "").toUpperCase();
+  console.log(`[cre-report] Demo mode: simulationId=${simulationId} phase=${phase}`);
+
+  // 1. Read base portfolio
+  const portfolio = readJson(path.join(demoDir, "base_portfolio.json"));
+
+  // 2. Select override file based on phase
+  let overrides: any;
+  if (phase === "B") {
+    overrides = readJson(path.join(demoDir, "override_phaseB_stress.json"));
+  } else if (phase === "C") {
+    overrides = readJson(path.join(demoDir, "override_phaseC_restore.json"));
+  } else {
+    // Phase A: no override — use base portfolio as-is
+    overrides = { overrideActive: false, portfolioAdjustments: [], contracts: [], earlyLiquidations: [] };
+  }
+
+  // 3. Merge (handles tokenSupplyOverride from override files)
+  const merged = mergePortfolio(portfolio, overrides);
+
+  // 4. Build ACTUS eventsBatch request
+  const actusContracts = merged.contracts.map((c: any) => ({
+    contractType: c.contractType,
+    contractID: c.contractID,
+    contractRole: c.contractRole,
+    contractDealDate: c.contractDealDate,
+    initialExchangeDate: c.initialExchangeDate,
+    statusDate: c.statusDate,
+    maturityDate: c.maturityDate,
+    notionalPrincipal: String(c.notionalPrincipal),
+    nominalInterestRate: String(c.nominalInterestRate),
+    currency: c.currency,
+    dayCountConvention: c.dayCountConvention,
+  }));
+
+  // 5. POST to ACTUS 8083/eventsBatch
+  const actusUrl = `${config.actusSimHost}/eventsBatch`;
+  console.log(`[cre-report] Demo: POST ${actusUrl} | ${actusContracts.length} contracts`);
+
+  const actusResponse = await axios.post(
+    actusUrl,
+    { contracts: actusContracts, riskFactors: [] },
+    { headers: { "Content-Type": "application/json" }, timeout: 15000 }
+  );
+  const actusResult = actusResponse.data;
+  const totalEvents = actusResult.reduce(
+    (sum: number, r: any) => sum + (r.events || []).length, 0
+  );
+
+  // 6. Compute health from portfolio (using shared helper)
+  const health = computeHealthFromPortfolio(merged, actusResult);
+
+  // 7. Compute maturityGapDays from nearest non-cash contract
+  const statusDate = new Date(merged.metadata.statusDate);
+  let nearestMaturityDays = 0;
+  for (const c of merged.contracts) {
+    if (c.reserveCategory !== "cash") {
+      const days = Math.max(0, Math.round(
+        (new Date(c.maturityDate).getTime() - statusDate.getTime()) / 86400000
+      ));
+      if (days > 0 && (nearestMaturityDays === 0 || days < nearestMaturityDays)) {
+        nearestMaturityDays = days;
+      }
+    }
+  }
+
+  // 8. Build CREReportResponse — exact shape workflow.ts expects
+  const report = {
+    backingRatioBps: Math.min(30000, health.backingRatioBps),
+    liquidityRatioBps: health.liquidityRatioBps,
+    riskScore: health.riskScore,
+    maturityGapDays: Math.min(255, nearestMaturityDays),
+    timestamp: Math.floor(Date.now() / 1000),
+    scenarioId,
+    concentrationHHI: 0,
+    assetQualityScore: 95,
+  };
+
+  console.log(`[cre-report] Demo report: ${JSON.stringify(report)}`);
+  console.log(`[cre-report] Demo health: backing=${report.backingRatioBps}bps liquidity=${report.liquidityRatioBps}bps score=${report.riskScore} mintGate=${health.mintGate}`);
+
+  const response: CREReportResponse = {
+    report,
+    simulation: {
+      id: simulationId,
+      name: `Demo Phase ${phase}`,
+      totalEvents,
+      ppEvents: 0,
+      peakRedemption: 0,
+      finalNominalValue: health.totalReserves,
+      contractCount: merged.contracts.length,
+    },
+    computedAt: new Date().toISOString(),
+  };
+
+  res.json(response);
+}
 
 export default router;

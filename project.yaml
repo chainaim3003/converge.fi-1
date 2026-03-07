@@ -44,3 +44,18 @@ staging-settings:
   rpcs:
     - chain-name: ethereum-testnet-sepolia
       url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+demo-A:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+demo-B:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+demo-C:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc

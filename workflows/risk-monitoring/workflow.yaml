@@ -61,3 +61,27 @@ staging-settings:
     workflow-path: "./workflow.ts"
     config-path: "./config.json"
     secrets-path: ""
+
+demo-A:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-demo-A.json"
+    secrets-path: ""
+
+demo-B:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-demo-B.json"
+    secrets-path: ""
+
+demo-C:
+  user-workflow:
+    workflow-name: "converge-risk-monitoring"
+  workflow-artifacts:
+    workflow-path: "./workflow.ts"
+    config-path: "./config-demo-C.json"
+    secrets-path: ""
