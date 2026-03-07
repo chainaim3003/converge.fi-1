@@ -3,10 +3,10 @@
  * Simplified verification without ZK programs or network implementation
  */
 
-import { ACTUSClient } from '../api/ACTUSClient.js';
-import { processStableCoinData, calculateRiskMetrics } from '../utils/metrics.js';
-import { validateStableCoinData, generateSummary } from '../utils/validation.js';
-import type { VerificationParams, VerificationResult } from '../types/index.js';
+import { ACTUSClient } from '../api/ACTUSClient';
+import { processStableCoinData, calculateRiskMetrics } from '../utils/metrics';
+import { validateStableCoinData, generateSummary } from '../utils/validation';
+import type { VerificationParams, VerificationResult } from '../types/index';
 
 export class StableCoinVerifier {
   /**

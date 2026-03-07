@@ -7,8 +7,8 @@
  */
 
 import axios from 'axios';
-import type { ACTUSContract, ACTUSRequestData, ACTUSResponse } from '../types/index.js';
-import { processRawACTUSData, printCoreACTUSResponse } from '../utils/ACTUSDataProcessor.js';
+import type { ACTUSContract, ACTUSRequestData, ACTUSResponse } from '../types/index';
+import { processRawACTUSData, printCoreACTUSResponse } from '../utils/ACTUSDataProcessor';
 
 export class ACTUSClient {
   private baseUrl: string;

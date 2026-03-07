@@ -1,0 +1,58 @@
+{
+  "id": "mint-halt-restore-demo",
+  "name": "Converge.fi 2-Minute Demo: MINT → HALT → RESTORE",
+  "description": "Three-phase demo showing forward-looking ACTUS simulation with on-chain mint gate. Phase A: healthy portfolio → mint succeeds. Phase B: cash withdrawal stress → mint blocked. Phase C: early T-bill liquidation + capital injection → mint restored.",
+  "demoDir": "",
+  "demoDir_comment": "Set via DEMO_DIR env var. Points to iter-fin-demo-1/ directory containing base_portfolio.json and override files.",
+  "tokenSupply": 500000,
+  "mintAmountPerPhase": "100000",
+  "deployedContracts": {
+    "ConvergeStablecoin": "0x8D8131547Ec5Cb2fF1bB941a28fA20e347A928F3",
+    "BackingRatioPolicy": "0x19bAfAcEe772a516271C7c2651703663b18137e2",
+    "LiquidityRatioPolicy": "0xB8b6c105e3BF22aFfF16fC53A0Cdecb14D2Ea1F3",
+    "RiskScorePolicy": "0x0Da6d451b0340fa32E85cDfCE043f1c573b4036d",
+    "RiskConsumerWithACE": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58"
+  },
+  "phases": [
+    {
+      "id": "phaseA",
+      "name": "HEALTHY — Mint succeeds",
+      "overrideFile": null,
+      "overrideFile_comment": "null means use default reserve_overrides.json (overrideActive: false)",
+      "pushReportMode": "demo-healthy",
+      "pushReportValues": {
+        "backingRatioBps": 10300,
+        "liquidityRatioBps": 2520,
+        "riskScore": 10
+      },
+      "expectMint": true,
+      "pauseAfterSeconds": 15
+    },
+    {
+      "id": "phaseB",
+      "name": "STRESSED — Mint blocked",
+      "overrideFile": "override_phaseB_stress.json",
+      "pushReportMode": "demo-stressed",
+      "pushReportValues": {
+        "backingRatioBps": 8300,
+        "liquidityRatioBps": 720,
+        "riskScore": 81
+      },
+      "expectMint": false,
+      "pauseAfterSeconds": 15
+    },
+    {
+      "id": "phaseC",
+      "name": "RESTORED — Mint succeeds again",
+      "overrideFile": "override_phaseC_restore.json",
+      "pushReportMode": "demo-restored",
+      "pushReportValues": {
+        "backingRatioBps": 10030,
+        "liquidityRatioBps": 4810,
+        "riskScore": 15
+      },
+      "expectMint": true,
+      "pauseAfterSeconds": 5
+    }
+  ]
+}

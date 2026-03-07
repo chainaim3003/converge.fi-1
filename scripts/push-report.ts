@@ -130,6 +130,33 @@ const PRESETS: Record<string, {
     riskScore:         85,     // 85 — above 70 threshold
     expectMint:        false,
   },
+
+  // ─── Demo presets (from ACTUS simulation of $500K reserve portfolio) ──────
+  // Values derived by demo-runner.js from real ACTUS eventsBatch processing
+  // of 5 PAM contracts (2 cash + 3 T-bills) in base_portfolio.json.
+  // See: iter-fin-demo-1/DEMO-SCRIPT.md for full numbers cross-check.
+
+  "demo-healthy": {
+    label:             "DEMO PHASE A — $515K reserves / $500K supply, 103% backed, 25.2% liquid → mint ALLOWED",
+    backingRatioBps:   10300,  // 103% — $515K / $500K
+    liquidityRatioBps: 2520,   // 25.2% — $130K cash / $515K reserves
+    riskScore:         10,     // low risk — all metrics healthy
+    expectMint:        true,
+  },
+  "demo-stressed": {
+    label:             "DEMO PHASE B — $100K cash withdrawn, 83% backed, 7.2% liquid → mint BLOCKED",
+    backingRatioBps:   8300,   // 83% — $415K / $500K (cash dropped from $120K to $20K)
+    liquidityRatioBps: 720,    // 7.2% — $30K cash / $415K reserves
+    riskScore:         81,     // high risk — backing + liquidity both breached
+    expectMint:        false,
+  },
+  "demo-restored": {
+    label:             "DEMO PHASE C — T-bill early liq (3% penalty=$3,750) + $90K injection → mint ALLOWED",
+    backingRatioBps:   10030,  // 100.3% — $501,250 / $500K
+    liquidityRatioBps: 4810,   // 48.1% — $241,250 cash / $501,250 reserves
+    riskScore:         15,     // low risk — all metrics restored
+    expectMint:        true,
+  },
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import creReportRouter from "./routes/cre-report";
 import verifyRouter from "./routes/verify";
 import portfoliosRouter from "./routes/portfolios";
 import scenariosRouter from "./routes/scenarios";
+import demoRouter from "./routes/demo";
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api", creReportRouter);
 app.use("/api", verifyRouter);
 app.use("/api", portfoliosRouter);
 app.use("/api", scenariosRouter);
+app.use("/api", demoRouter);
 
 // ─── Root ───
 app.get("/", (_req, res) => {

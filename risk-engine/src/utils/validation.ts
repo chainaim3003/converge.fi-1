@@ -7,7 +7,7 @@
  *   - Summary generation: generateSummary, displaySummary
  */
 
-import type { StableCoinRiskData, RiskMetrics, VerificationSummary } from '../types/index.js';
+import type { StableCoinRiskData, RiskMetrics, VerificationSummary } from '../types/index';
 
 // ═══════════════════════════════════════════════════════════════
 // INPUT VALIDATION (used by routes: cre-report, simulate, verify)

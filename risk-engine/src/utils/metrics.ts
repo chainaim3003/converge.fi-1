@@ -10,7 +10,7 @@ import type {
   ReserveComponents,
   QualityMetrics,
   RiskMetrics
-} from '../types/index.js';
+} from '../types/index';
 
 /**
  * Process ACTUS response into StableCoin risk data structure

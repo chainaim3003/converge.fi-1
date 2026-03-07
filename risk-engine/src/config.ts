@@ -26,4 +26,10 @@ export const config = {
 
   /** Path to portfolio configs */
   portfoliosDir: path.resolve(__dirname, "../config/portfolios"),
+
+  /** Path to demo directory (iter-fin-demo-1) containing base_portfolio.json + override files */
+  demoDir: process.env.DEMO_DIR || "",
+
+  /** Path to demo sequence config */
+  demoSequencePath: path.resolve(__dirname, "../config/demo/demo-sequence.json"),
 };
