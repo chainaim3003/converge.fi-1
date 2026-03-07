@@ -1,7 +1,14 @@
+# Alchemy RPC (primary)
 local-simulation:
   rpcs:
     - chain-name: ethereum-testnet-sepolia
       url: https://eth-sepolia.g.alchemy.com/v2/u28p93Y4wW9jIqF_3Tdbc
+
+# # PublicNode RPC (fallback — uncomment if Alchemy is down)
+# local-simulation:
+#   rpcs:
+#     - chain-name: ethereum-testnet-sepolia
+#       url: https://ethereum-sepolia-rpc.publicnode.com
 
 maturity-ladder:
   rpcs:
