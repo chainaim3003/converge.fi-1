@@ -483,6 +483,9 @@ function MetricsPanel({ chainStatus, refreshing, ticker, chainReady }: {
 
 
 
+          {/* Chain Info */}
+          <ChainInfoCard blockNumber={chainStatus.blockNumber} staleAge={chainStatus.staleAge} />
+
           {/* Activity Ticker */}
           <div className="gloss-card p-4">
             <div className="section-label mb-3">Activity</div>
@@ -506,6 +509,46 @@ function MetricsPanel({ chainStatus, refreshing, ticker, chainReady }: {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Chain Info Card ────────────────────────────────────────────────────────
+
+function ChainInfoCard({ blockNumber, staleAge }: { blockNumber: number; staleAge: number }) {
+  const reportTime = new Date(Date.now() - staleAge * 1000);
+  const reportTimeStr = reportTime.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  const age = staleAge;
+  const ageStr = age < 60
+    ? `${age}s ago`
+    : age < 3600
+    ? `${Math.floor(age / 60)}m ${age % 60}s ago`
+    : `${Math.floor(age / 3600)}h ${Math.floor((age % 3600) / 60)}m ago`;
+
+  const fresh = age < 300; // under 5 min = fresh
+
+  return (
+    <div className="gloss-card p-4">
+      <div className="section-label mb-3">Chain Info</div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">Block</span>
+          <span className="font-mono font-medium text-gray-800">#{blockNumber}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">Last Report</span>
+          <span className="font-mono font-medium text-gray-800">{reportTimeStr}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">Data Age</span>
+          <span className={`font-medium ${fresh ? "text-emerald-600" : "text-amber-600"}`}>{ageStr}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">Network</span>
+          <span className="font-medium text-gray-800">Ethereum Sepolia</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -676,7 +719,7 @@ function StepResult({ index, state, chainStatus, transactions }: {
     return (
       <div className="space-y-3">
         {cre   && <CRETerminal result={cre} />}
-        {actus && <ActusPanel data={actus} />}
+        {actus && <ActusPanel data={actus} alertMode />}
       </div>
     );
   }
@@ -786,7 +829,7 @@ function Step0Result({ chainStatus, transactions }: {
 
 // ─── ACTUS Panel ──────────────────────────────────────────────────────────────
 
-function ActusPanel({ data }: { data: DemoHealthResponse }) {
+function ActusPanel({ data, alertMode }: { data: DemoHealthResponse; alertMode?: boolean }) {
   const h  = data.health;
   const th = data.thresholds;
   const open = h.mintGate === "OPEN";
@@ -804,8 +847,8 @@ function ActusPanel({ data }: { data: DemoHealthResponse }) {
       {/* Mint gate hero */}
       <div className={open ? "mint-hero-open" : "mint-hero-closed"} style={{ borderRadius: "10px" }}>
         <div className="p-4 text-center">
-          <div className={`text-xl font-black tracking-tight ${open ? "text-emerald-700" : "text-red-700"}`}>
-            {open ? "✅ MINTING ALLOWED" : "🛑 MINTING BLOCKED"}
+          <div className={`text-xl font-black tracking-tight ${open ? "text-emerald-700" : alertMode ? "text-amber-700" : "text-red-700"}`}>
+            {open ? "✅ MINTING ALLOWED" : alertMode ? "⚠ RESERVE METRICS ALERT: Further Minting could be blocked" : "🛑 MINTING BLOCKED"}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             Supply: {formatUSD(h.tokenSupply)} · Reserves: {formatUSD(h.totalReserves)}
