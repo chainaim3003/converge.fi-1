@@ -1,12 +1,13 @@
 /**
- * Converge.fi V4 Dashboard — E2E Narrative Flow (Glassmorphism Edition)
+ * Converge.fi V4 Dashboard — E2E Narrative Flow (White Glossy Edition)
  *
  * Layout: Two-column side-by-side
- *   Left  (62%) — Step cards, scrollable
- *   Right (38%) — Live metrics panel, sticky
- *   ⇄ Swap button in persistent bar swaps columns, preference saved to localStorage
+ *   Left  (flex-1) — Step cards, scrollable
+ *   Right (340px)  — Live metrics panel, sticky
+ *   ⇄ Swap button in persistent bar
  *
  * Workflow logic: UNCHANGED. No mocks. No fallbacks. CRE never skipped.
+ * Visual layer:   White glossy surfaces, surgical colour use, premium hierarchy.
  */
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -42,7 +43,6 @@ import { LoadingSpinner } from "./components/shared/LoadingSpinner";
 
 type StepStatus = "pending" | "running" | "done" | "error" | "blocked";
 interface StepState { status: StepStatus; log: string[]; data: Record<string, unknown>; }
-
 interface TickerEntry { id: number; time: string; icon: string; text: string; }
 
 const INITIAL_STEPS: StepState[] = Array.from({ length: 7 }, () => ({
@@ -70,11 +70,9 @@ function App() {
   const [ticker, setTicker]             = useState<TickerEntry[]>([]);
   const tickerIdRef                     = useRef(0);
 
-  // Layout swap — default Mode B (metrics RIGHT), persisted
   const [metricsOnLeft, setMetricsOnLeft] = useState<boolean>(() => {
     try { return localStorage.getItem("metricsOnLeft") === "true"; } catch { return false; }
   });
-
   const toggleLayout = () => setMetricsOnLeft(prev => {
     const next = !prev;
     try { localStorage.setItem("metricsOnLeft", String(next)); } catch {}
@@ -105,7 +103,7 @@ function App() {
     finally { setRefreshing(false); }
   }, []);
 
-  // ─── Step runners — workflow logic unchanged, addTicker calls added ─────────
+  // ─── Step runners — workflow logic UNCHANGED ─────────────────────────────────
 
   const runStep0 = useCallback(async () => {
     patchStep(0, { status: "running", log: [], data: {} });
@@ -278,7 +276,6 @@ function App() {
 
   const STEP_RUNNERS = [runStep0, runStep1, runStep2, runStep3, runStep4, runStep5, runStep6];
 
-  // Guard against React StrictMode double-invoke in dev
   const step0Fired = useRef(false);
   useEffect(() => {
     if (step0Fired.current) return;
@@ -286,87 +283,80 @@ function App() {
     runStep0();
   }, []); // eslint-disable-line
 
-  // ─── Whether chain data is ready (Step 0 done) ────────────────────────────
   const chainReady = steps[0].status === "done";
 
-  // ─── Steps column ────────────────────────────────────────────────────────────
+  // ─── Columns ─────────────────────────────────────────────────────────────────
 
   const StepsColumn = (
-    <div className="flex-1 min-w-0 space-y-3">
+    <div className="flex-1 min-w-0 space-y-2">
       {STEP_META.map((meta, i) => (
         <React.Fragment key={i}>
           <StepCard
-            index={i}
-            meta={meta}
-            state={steps[i]}
-            isActive={currentStep === i}
-            isEnabled={i <= currentStep}
+            index={i} meta={meta} state={steps[i]}
+            isActive={currentStep === i} isEnabled={i <= currentStep}
             onRun={STEP_RUNNERS[i]}
             chainStatus={chainStatus}
             transactions={i === 0 ? transactions : null}
           />
           {i < 6 && (
-            <div className={`step-connector h-3 w-0.5 ml-8 ${steps[i].status === "done" ? "step-connector-done" : ""}`} />
+            <div className={`step-connector h-4 ${steps[i].status === "done" ? "step-connector-done" : ""}`} />
           )}
         </React.Fragment>
       ))}
     </div>
   );
 
-  // ─── Metrics column ───────────────────────────────────────────────────────────
-
   const MetricsColumn = (
-    <div
-      className="flex-shrink-0"
-      style={{
-        width: "340px",
-        position: "sticky",
-        top: "96px",        // header (~56px) + bar (~40px)
-        alignSelf: "flex-start",
-        maxHeight: "calc(100vh - 112px)",
-        overflowY: "auto",
-      }}
-    >
+    <div className="flex-shrink-0" style={{
+      width: "340px",
+      position: "sticky",
+      top: "92px",
+      alignSelf: "flex-start",
+      maxHeight: "calc(100vh - 108px)",
+      overflowY: "auto",
+    }}>
       <MetricsPanel chainStatus={chainStatus} refreshing={refreshing} ticker={ticker} chainReady={chainReady} />
     </div>
   );
 
   return (
-    <div className="min-h-screen aurora-bg text-gray-100" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="page-bg" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* ═══ HEADER ═══ */}
-      <header className="glass-header sticky top-0 z-50 px-6 py-3">
+      <header className="gloss-header sticky top-0 z-50 px-6 py-3">
         <div className="max-w-screen-xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl logo-glow flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-sm tracking-tight">C</span>
+            <div className="logo-mark w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Two arcs converging — represents risk signals merging into a single on-chain decision */}
+                <path d="M4 4 C4 4 8 7 11 11 C8 15 4 18 4 18" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.6"/>
+                <path d="M9 4 C9 4 13 7 16 11 C13 15 9 18 9 18" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.85"/>
+                <circle cx="17" cy="11" r="2" fill="white" />
+              </svg>
             </div>
             <div>
-              <div className="font-bold text-sm text-white tracking-tight">Converge.fi</div>
-              <div className="text-xs" style={{ color: "rgba(148,163,184,0.7)" }}>
+              <div className="font-bold text-sm text-gray-900 tracking-tight">Converge.fi</div>
+              <div className="text-xs text-gray-400">
                 Autonomous Reserve Risk Monitor · V4 · Ethereum Sepolia
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
             {chainStatus && (
               <div className="flex items-center gap-2 text-xs">
                 <div className="relative flex-shrink-0">
-                  <div className={`w-2 h-2 rounded-full relative z-10 ${chainStatus.mintAllowed ? "bg-emerald-400" : "bg-red-400"}`} />
-                  <div className={`sonar-ring absolute inset-0 rounded-full ${chainStatus.mintAllowed ? "sonar-ring-green" : "sonar-ring-red"}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full relative z-10 ${chainStatus.mintAllowed ? "bg-emerald-500" : "bg-red-500"}`} />
+                  <div className={`sonar-ring absolute inset-0 rounded-full ${chainStatus.mintAllowed ? "sonar-green" : "sonar-red"}`} />
                 </div>
-                <span style={{ color: "rgba(148,163,184,0.8)" }}>Mint Gate:</span>
-                <strong className={chainStatus.mintAllowed ? "text-emerald-400" : "text-red-400"}>
+                <span className="text-gray-500">Mint Gate</span>
+                <span className={`font-bold ${chainStatus.mintAllowed ? "text-emerald-600" : "text-red-600"}`}>
                   {chainStatus.mintAllowed ? "OPEN" : "CLOSED"}
-                </strong>
+                </span>
               </div>
             )}
-            <div className="text-xs px-2.5 py-1 rounded-full" style={{
-              background: "rgba(99,102,241,0.12)",
-              border: "1px solid rgba(99,102,241,0.25)",
-              color: "rgba(165,180,252,0.9)",
-            }}>
+            <div className="text-xs px-3 py-1 rounded-full font-medium"
+              style={{ background: "#ede9fe", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.18)" }}>
               Chainlink CRE
             </div>
           </div>
@@ -376,23 +366,14 @@ function App() {
       {/* ═══ PERSISTENT BAR ═══ */}
       {chainStatus && (
         <PersistentBar
-          status={chainStatus}
-          refreshing={refreshing}
-          metricsOnLeft={metricsOnLeft}
-          onSwap={toggleLayout}
+          status={chainStatus} refreshing={refreshing}
+          metricsOnLeft={metricsOnLeft} onSwap={toggleLayout}
         />
       )}
 
       {/* ═══ TWO-COLUMN BODY ═══ */}
-      <div
-        className="max-w-screen-xl mx-auto px-4 py-6 flex gap-5 items-start"
-        style={{ transition: "all 0.35s ease" }}
-      >
-        {metricsOnLeft ? (
-          <>{MetricsColumn}{StepsColumn}</>
-        ) : (
-          <>{StepsColumn}{MetricsColumn}</>
-        )}
+      <div className="max-w-screen-xl mx-auto px-4 py-6 flex gap-5 items-start">
+        {metricsOnLeft ? <>{MetricsColumn}{StepsColumn}</> : <>{StepsColumn}{MetricsColumn}</>}
       </div>
     </div>
   );
@@ -400,60 +381,37 @@ function App() {
 
 // ─── Persistent Bar ───────────────────────────────────────────────────────────
 
-function PersistentBar({
-  status, refreshing, metricsOnLeft, onSwap,
-}: {
-  status: ChainStatusResponse;
-  refreshing: boolean;
-  metricsOnLeft: boolean;
-  onSwap: () => void;
+function PersistentBar({ status, refreshing, metricsOnLeft, onSwap }: {
+  status: ChainStatusResponse; refreshing: boolean; metricsOnLeft: boolean; onSwap: () => void;
 }) {
   return (
-    <div className="glass-bar px-6 py-2 sticky z-40" style={{ top: "56px" }}>
-      <div className="max-w-screen-xl mx-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <span className="font-semibold tracking-widest uppercase text-indigo-400" style={{ fontSize: "10px" }}>
-          Live Chain
-        </span>
+    <div className="gloss-bar px-6 py-2 sticky z-40" style={{ top: "56px" }}>
+      <div className="max-w-screen-xl mx-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+        <span className="section-label">Live Chain</span>
 
         <BarStat label="Supply"   value={`${status.totalSupply.toLocaleString()} cvUSD`} />
         <BarStat label="Deployer" value={`${status.deployerBalance.toLocaleString()} cvUSD`} />
         <BarStat label="LINK"     value={status.linkBalance.toFixed(2)} />
 
-        <div className="h-3 w-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+        <div className="h-3 w-px bg-gray-200" />
 
         <BarStat label="Backing"   value={`${status.onChainBacking}%`}   ok={status.onChainBacking >= 100} />
         <BarStat label="Liquidity" value={`${status.onChainLiquidity}%`} ok={status.onChainLiquidity >= 30} />
         <BarStat label="Risk"      value={`${status.onChainRiskScore}`}  ok={status.onChainRiskScore <= 70} />
 
-        <div className={`px-2.5 py-0.5 rounded-full text-xs font-semibold`} style={{
-          background: status.mintAllowed ? "rgba(52,211,153,0.10)" : "rgba(248,113,113,0.10)",
-          border: `1px solid ${status.mintAllowed ? "rgba(52,211,153,0.20)" : "rgba(248,113,113,0.20)"}`,
-          color: status.mintAllowed ? "#34d399" : "#f87171",
-        }}>
-          {status.mintAllowed ? "✓ MINT OPEN" : "✗ MINT CLOSED"}
-        </div>
+        <span className={`badge ${status.mintAllowed ? "badge-green" : "badge-red"}`}>
+          {status.mintAllowed ? "✓ Mint Open" : "✗ Mint Closed"}
+        </span>
 
         {refreshing && <LoadingSpinner size="sm" />}
 
-        <span className="ml-auto" style={{ color: "rgba(100,116,139,0.7)", fontSize: "11px" }}>
+        <span className="ml-auto text-gray-400" style={{ fontSize: "11px" }}>
           Block #{status.blockNumber}
         </span>
 
-        {/* Swap button */}
-        <button
-          onClick={onSwap}
-          title={metricsOnLeft ? "Move metrics to right" : "Move metrics to left"}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all"
-          style={{
-            background: "rgba(99,102,241,0.10)",
-            border: "1px solid rgba(99,102,241,0.25)",
-            color: "rgba(165,180,252,0.9)",
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.20)")}
-          onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,0.10)")}
-        >
-          <span style={{ fontSize: "13px" }}>⇄</span>
-          <span>Swap</span>
+        <button onClick={onSwap}
+          className="btn-swap flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium">
+          <span>⇄</span><span>Swap</span>
         </button>
       </div>
     </div>
@@ -462,20 +420,18 @@ function PersistentBar({
 
 function BarStat({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
-    <span style={{ color: "rgba(148,163,184,0.7)" }}>
+    <span className="text-gray-500">
       {label}:{" "}
-      <strong className={ok === undefined ? "text-gray-200" : ok ? "text-emerald-400" : "text-red-400"}>
+      <strong className={ok === undefined ? "text-gray-800" : ok ? "text-emerald-600" : "text-red-600"}>
         {value}
       </strong>
     </span>
   );
 }
 
-// ─── Metrics Panel (right/left sticky column) ─────────────────────────────────
+// ─── Metrics Panel ────────────────────────────────────────────────────────────
 
-function MetricsPanel({
-  chainStatus, refreshing, ticker, chainReady,
-}: {
+function MetricsPanel({ chainStatus, refreshing, ticker, chainReady }: {
   chainStatus: ChainStatusResponse | null;
   refreshing: boolean;
   ticker: TickerEntry[];
@@ -483,121 +439,102 @@ function MetricsPanel({
 }) {
   return (
     <div className="space-y-3">
-
-      {/* ── Section label ── */}
-      <div className="flex items-center gap-2 px-1">
-        <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: "rgba(99,102,241,0.8)" }}>
-          Live Metrics
-        </span>
+      <div className="flex items-center justify-between px-1">
+        <span className="section-label">Live Metrics</span>
         {refreshing && <LoadingSpinner size="sm" />}
       </div>
 
       {!chainStatus ? (
-        <div className="glass-card rounded-2xl p-6 text-center">
+        <div className="gloss-card p-8 text-center">
           <LoadingSpinner size="sm" />
-          <div className="text-xs mt-2" style={{ color: "rgba(148,163,184,0.5)" }}>Connecting...</div>
+          <div className="text-xs text-gray-400 mt-2">Connecting to chain...</div>
         </div>
       ) : (
         <>
-          {/* ── Mint Gate Hero ── */}
-          <div className={`glass-card rounded-2xl p-5 text-center ${chainStatus.mintAllowed ? "glass-card-done" : "glass-card-blocked"}`}>
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <div className="relative">
-                <div className={`w-3 h-3 rounded-full ${chainStatus.mintAllowed ? "bg-emerald-400" : "bg-red-400"}`} />
-                <div className={`sonar-ring absolute inset-0 rounded-full ${chainStatus.mintAllowed ? "sonar-ring-green" : "sonar-ring-red"}`} />
+          {/* Mint Gate Hero */}
+          <div className={chainStatus.mintAllowed ? "mint-hero-open" : "mint-hero-closed"}>
+            <div className="p-5 text-center">
+              <div className="flex items-center justify-center gap-2 mb-1.5">
+                <div className="relative">
+                  <div className={`w-2.5 h-2.5 rounded-full ${chainStatus.mintAllowed ? "bg-emerald-500" : "bg-red-500"}`} />
+                  <div className={`sonar-ring absolute inset-0 rounded-full ${chainStatus.mintAllowed ? "sonar-green" : "sonar-red"}`} />
+                </div>
+                <span className="section-label">{chainStatus.mintAllowed ? "Mint Gate" : "Mint Gate"}</span>
               </div>
-              <span className="text-xs uppercase tracking-widest" style={{ color: "rgba(148,163,184,0.6)" }}>Mint Gate</span>
+              <div className={`text-3xl font-black tracking-tight ${chainStatus.mintAllowed ? "text-emerald-700" : "text-red-700"}`}>
+                {chainStatus.mintAllowed ? "OPEN" : "CLOSED"}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{chainStatus.mintReason}</div>
             </div>
-            <div className={`text-3xl font-black tracking-tight ${chainStatus.mintAllowed ? "text-emerald-400" : "text-red-400"}`}
-              style={{ textShadow: chainStatus.mintAllowed ? "0 0 20px rgba(52,211,153,0.5)" : "0 0 20px rgba(248,113,113,0.5)" }}>
-              {chainStatus.mintAllowed ? "OPEN" : "CLOSED"}
-            </div>
-            <div className="text-xs mt-1" style={{ color: "rgba(148,163,184,0.5)" }}>{chainStatus.mintReason}</div>
           </div>
 
-          {/* ── 4 Policy Gates — only after chain setup completes ── */}
-          <div className="glass-card rounded-2xl p-4 space-y-2">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "rgba(99,102,241,0.7)" }}>
-              Policy Gates
-            </div>
+          {/* Policy Gates */}
+          <div className="gloss-card p-4">
+            <div className="section-label mb-3">Policy Gates</div>
             {!chainReady ? (
-              <div className="py-6 text-center space-y-2">
-                <div className="text-2xl">🔒</div>
-                <div className="text-xs" style={{ color: "rgba(100,116,139,0.6)" }}>
-                  Gates populate after<br />chain setup completes
-                </div>
+              <div className="py-6 text-center">
+                <div className="text-2xl mb-2">🔒</div>
+                <div className="text-xs text-gray-400">Gates populate after<br />chain setup completes</div>
               </div>
             ) : (
-              <>
-                <MetricGateRow
-                  name="Backing"
-                  value={`${chainStatus.onChainBacking}%`}
-                  passed={chainStatus.onChainBacking >= 100}
-                  threshold="≥ 100%"
-                  reg="GENIUS Act §4"
-                />
-                <MetricGateRow
-                  name="Liquidity"
-                  value={`${chainStatus.onChainLiquidity}%`}
-                  passed={chainStatus.onChainLiquidity >= 30}
-                  threshold="≥ 30%"
-                  reg="MiCA Art.54"
-                />
-                <MetricGateRow
-                  name="Risk Score"
-                  value={`${chainStatus.onChainRiskScore}`}
-                  passed={chainStatus.onChainRiskScore <= 70}
-                  threshold="≤ 70"
-                  reg="Composite"
-                />
-                <MetricGateRow
-                  name="Eligibility"
-                  value="—"
-                  passed={chainStatus.mintAllowed}
-                  threshold="≥ 100%"
-                  reg="GENIUS Act §4(a)"
-                />
-              </>
+              <div className="space-y-2">
+                {[
+                  { name: "Backing",    value: `${chainStatus.onChainBacking}%`,   passed: chainStatus.onChainBacking >= 100,   threshold: "≥ 100%", reg: "GENIUS §4" },
+                  { name: "Liquidity",  value: `${chainStatus.onChainLiquidity}%`, passed: chainStatus.onChainLiquidity >= 30,  threshold: "≥ 30%",  reg: "MiCA 54"  },
+                  { name: "Risk Score", value: `${chainStatus.onChainRiskScore}`,  passed: chainStatus.onChainRiskScore <= 70,  threshold: "≤ 70",   reg: "Composite" },
+                  { name: "Eligibility",value: "—",                                passed: chainStatus.mintAllowed,             threshold: "≥ 100%", reg: "GENIUS §4(a)" },
+                ].map((g, i) => (
+                  <div key={g.name} className={`gate-row ${g.passed ? "gate-pass" : "gate-fail"}`}
+                    style={{ animationDelay: `${i * 60}ms` }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-600">{g.name}</span>
+                      <span className={`text-sm font-bold ${g.passed ? "text-emerald-700" : "text-red-700"}`}>
+                        {g.value}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-xs text-gray-400">{g.threshold}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400 italic">{g.reg}</span>
+                        <span className={`text-xs font-bold ${g.passed ? "text-emerald-600" : "text-red-600"}`}>
+                          {g.passed ? "PASS" : "FAIL"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* ── Balances ── */}
-          <div className="glass-card rounded-2xl p-4 space-y-2">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "rgba(99,102,241,0.7)" }}>
-              Balances
+          {/* Balances */}
+          <div className="gloss-card p-4">
+            <div className="section-label mb-3">Balances</div>
+            <div className="space-y-2">
+              <BalRow label="Total Supply"    value={`${chainStatus.totalSupply.toLocaleString()} cvUSD`} />
+              <BalRow label="Deployer"        value={`${chainStatus.deployerBalance.toLocaleString()} cvUSD`} />
+              <BalRow label="LINK"            value={`${chainStatus.linkBalance.toFixed(4)} LINK`} warn={chainStatus.linkBalance < 1} />
+              <div className="divider my-1" />
+              <BalRow label="Block"           value={`#${chainStatus.blockNumber}`} mono />
+              <BalRow label="Network"         value={chainStatus.network} />
             </div>
-            <BalanceRow label="Total Supply"     value={`${chainStatus.totalSupply.toLocaleString()} cvUSD`} />
-            <BalanceRow label="Deployer"          value={`${chainStatus.deployerBalance.toLocaleString()} cvUSD`} />
-            <BalanceRow label="LINK"              value={`${chainStatus.linkBalance.toFixed(4)} LINK`} highlight={chainStatus.linkBalance < 1 ? "warn" : "ok"} />
-            <BalanceRow label="Block"             value={`#${chainStatus.blockNumber}`} mono />
-            <BalanceRow label="Network"           value={chainStatus.network} />
           </div>
 
-          {/* ── Activity Ticker ── */}
-          <div className="glass-card rounded-2xl p-4">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "rgba(99,102,241,0.7)" }}>
-              Activity
-            </div>
+          {/* Activity Ticker */}
+          <div className="gloss-card p-4">
+            <div className="section-label mb-3">Activity</div>
             {ticker.length === 0 ? (
-              <div className="text-xs py-4 text-center" style={{ color: "rgba(100,116,139,0.5)" }}>
-                No events yet...
-              </div>
+              <div className="py-5 text-center text-xs text-gray-400">No events yet...</div>
             ) : (
-              <div className="space-y-1.5">
-                {ticker.map((entry, idx) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-start gap-2 text-xs fade-in-up rounded-lg px-2 py-1.5"
-                    style={{
-                      background: "rgba(255,255,255,0.02)",
-                      border: "1px solid rgba(255,255,255,0.04)",
-                      opacity: Math.max(0.35, 1 - idx * 0.08),
-                    }}
-                  >
-                    <span className="flex-shrink-0 text-sm leading-none">{entry.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate" style={{ color: "rgba(203,213,225,0.85)" }}>{entry.text}</div>
-                      <div className="font-mono" style={{ color: "rgba(100,116,139,0.6)", fontSize: "10px" }}>{entry.time}</div>
+              <div className="space-y-2">
+                {ticker.map((e, idx) => (
+                  <div key={e.id} className="ticker-item" style={{ opacity: Math.max(0.35, 1 - idx * 0.09) }}>
+                    <div className="flex items-start gap-2">
+                      <span className="text-base leading-none flex-shrink-0">{e.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-gray-700 leading-snug truncate">{e.text}</div>
+                        <div className="text-xs text-gray-400 font-mono mt-0.5" style={{ fontSize: "10px" }}>{e.time}</div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -610,66 +547,23 @@ function MetricsPanel({
   );
 }
 
-// ─── Metric Gate Row (in metrics panel) ──────────────────────────────────────
-
-function MetricGateRow({ name, value, passed, threshold, reg }: {
-  name: string; value: string; passed: boolean; threshold: string; reg: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{
-      background: passed ? "rgba(52,211,153,0.05)" : "rgba(248,113,113,0.05)",
-      border: `1px solid ${passed ? "rgba(52,211,153,0.15)" : "rgba(248,113,113,0.15)"}`,
-    }}>
-      <span className={`text-base font-bold flex-shrink-0 ${passed ? "text-emerald-400" : "text-red-400"}`}>
-        {passed ? "✓" : "✗"}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs" style={{ color: "rgba(148,163,184,0.7)" }}>{name}</span>
-          <span className={`text-sm font-bold shimmer-text ${passed ? "shimmer-safe" : "shimmer-danger"}`}>
-            {value}
-          </span>
-        </div>
-        <div className="flex justify-between text-xs mt-0.5">
-          <span style={{ color: "rgba(100,116,139,0.6)" }}>{threshold}</span>
-          <span style={{ color: "rgba(100,116,139,0.5)", fontStyle: "italic" }}>{reg}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Balance Row ──────────────────────────────────────────────────────────────
-
-function BalanceRow({ label, value, highlight, mono }: {
-  label: string; value: string; highlight?: "ok" | "warn"; mono?: boolean;
-}) {
-  const color =
-    highlight === "warn" ? "#fbbf24" :
-    highlight === "ok"   ? "#34d399" :
-    "rgba(203,213,225,0.9)";
-
+function BalRow({ label, value, warn, mono }: { label: string; value: string; warn?: boolean; mono?: boolean }) {
   return (
     <div className="flex items-center justify-between text-xs">
-      <span style={{ color: "rgba(148,163,184,0.55)" }}>{label}</span>
-      <span className={mono ? "font-mono" : "font-medium"} style={{ color }}>{value}</span>
+      <span className="text-gray-400">{label}</span>
+      <span className={`font-medium ${mono ? "font-mono" : ""} ${warn ? "text-amber-600" : "text-gray-800"}`}>
+        {value}
+      </span>
     </div>
   );
 }
 
 // ─── Step Card ────────────────────────────────────────────────────────────────
 
-function StepCard({
-  index, meta, state, isActive, isEnabled, onRun, chainStatus, transactions,
-}: {
-  index: number;
-  meta: (typeof STEP_META)[0];
-  state: StepState;
-  isActive: boolean;
-  isEnabled: boolean;
-  onRun: () => void;
-  chainStatus: ChainStatusResponse | null;
-  transactions: ChainTxResponse | null;
+function StepCard({ index, meta, state, isActive, isEnabled, onRun, chainStatus, transactions }: {
+  index: number; meta: (typeof STEP_META)[0]; state: StepState;
+  isActive: boolean; isEnabled: boolean; onRun: () => void;
+  chainStatus: ChainStatusResponse | null; transactions: ChainTxResponse | null;
 }) {
   const isRunning = state.status === "running";
   const isDone    = state.status === "done";
@@ -678,68 +572,75 @@ function StepCard({
   const isPending = state.status === "pending";
 
   const cardClass = [
-    "glass-card rounded-2xl overflow-hidden relative transition-all duration-300",
-    isDone    ? "glass-card-done"    : "",
-    isBlocked ? "glass-card-blocked" : "",
-    isRunning ? "glass-card-running" : "",
-    isError   ? "glass-card-error"   : "",
+    "gloss-card relative overflow-hidden",
+    isDone    ? "gloss-card-done"    : "",
+    isBlocked ? "gloss-card-blocked" : "",
+    isRunning ? "gloss-card-running" : "",
+    isError   ? "gloss-card-error"   : "",
+    isRunning ? "running-accent"     : "",
   ].join(" ");
 
-  const numStyle: React.CSSProperties =
-    isDone    ? { background: "linear-gradient(135deg,#059669,#34d399)", boxShadow: "0 0 14px rgba(52,211,153,0.45)" } :
-    isBlocked ? { background: "linear-gradient(135deg,#dc2626,#f87171)", boxShadow: "0 0 14px rgba(248,113,113,0.45)" } :
-    isError   ? { background: "linear-gradient(135deg,#dc2626,#f87171)", boxShadow: "0 0 12px rgba(248,113,113,0.35)" } :
-    isRunning ? { background: "linear-gradient(135deg,#4338ca,#818cf8)", boxShadow: "0 0 16px rgba(99,102,241,0.6)"  } :
-    isActive && isEnabled ? { background: "linear-gradient(135deg,#4f46e5,#6366f1)", boxShadow: "0 0 12px rgba(99,102,241,0.35)" } :
-    { background: "rgba(255,255,255,0.06)", boxShadow: "none" };
+  const numClass =
+    isDone    ? "step-num step-num-done"    :
+    isBlocked ? "step-num step-num-blocked" :
+    isError   ? "step-num step-num-error"   :
+    isRunning ? "step-num step-num-running" :
+    isActive && isEnabled ? "step-num step-num-active" :
+    "step-num step-num-pending";
 
-  const statusBadge =
-    isDone    ? <Badge color="green">✓ Done</Badge>      :
-    isBlocked ? <Badge color="red">🛑 Blocked</Badge>    :
-    isError   ? <Badge color="red">✗ Error</Badge>       :
-    isRunning ? <Badge color="indigo">⟳ Running</Badge>  :
-    <Badge color="dim">Pending</Badge>;
+  const badge =
+    isDone    ? <span className="badge badge-green">✓ Done</span>      :
+    isBlocked ? <span className="badge badge-red">🛑 Blocked</span>    :
+    isError   ? <span className="badge badge-red">✗ Error</span>       :
+    isRunning ? <span className="badge badge-indigo">⟳ Running</span>  :
+    <span className="badge badge-gray">Pending</span>;
 
   const showButton = !meta.autoRun && isEnabled && (isPending || isError);
 
   return (
     <div className={cardClass}>
-      {isDone    && <div className="border-sweep-line border-sweep-line-green" />}
-      {isBlocked && <div className="border-sweep-line border-sweep-line-red" />}
+      {isDone    && <div className="sweep-line sweep-line-green" />}
+      {isBlocked && <div className="sweep-line sweep-line-red" />}
 
+      {/* Card header row */}
       <div className="px-5 py-4 flex items-center gap-4">
-        <div className="relative flex-shrink-0 w-9 h-9">
-          {isRunning && <div className="ring-ping" style={{ background: "rgba(99,102,241,0.25)" }} />}
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white relative z-10" style={numStyle}>
-            {isDone ? "✓" : isBlocked ? "!" : index}
-          </div>
+        <div className={numClass}>
+          {isDone ? "✓" : isBlocked ? "!" : index}
         </div>
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-gray-100">{meta.title}</span>
-            {statusBadge}
+            <span className="text-sm font-semibold text-gray-900">{meta.title}</span>
+            {badge}
           </div>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(148,163,184,0.6)" }}>{meta.subtitle}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{meta.subtitle}</p>
         </div>
-
         {showButton && (
           <button onClick={onRun} disabled={isRunning}
-            className="btn-run flex-shrink-0 px-4 py-1.5 text-white text-xs font-semibold rounded-lg">
+            className="btn-execute flex-shrink-0 px-4 py-1.5 text-xs font-semibold rounded-lg">
             Execute
           </button>
         )}
         {isRunning && <LoadingSpinner size="sm" />}
       </div>
 
+      {/* Terminal log */}
       {state.log.length > 0 && (
-        <div style={{ borderTop: "1px solid rgba(99,102,241,0.15)" }}>
+        <div className="terminal-window" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <div className="terminal-topbar">
+            <div className="term-dot" style={{ background: "#ff5f57" }} />
+            <div className="term-dot" style={{ background: "#febc2e" }} />
+            <div className="term-dot" style={{ background: "#28c840" }} />
+            <span className="ml-2 text-xs font-mono text-gray-500">
+              converge.fi · step {index}
+            </span>
+          </div>
           <TerminalLog lines={state.log} />
         </div>
       )}
 
+      {/* Result panel */}
       {(isDone || isBlocked) && Object.keys(state.data).length > 0 && (
-        <div className="p-4 space-y-4 fade-in-up" style={{ borderTop: "1px solid rgba(99,102,241,0.12)" }}>
+        <div className="p-4 space-y-3 fade-up" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
           <StepResult index={index} state={state} chainStatus={chainStatus} transactions={transactions} />
         </div>
       )}
@@ -756,34 +657,22 @@ function TerminalLog({ lines }: { lines: string[] }) {
   return (
     <div ref={ref}
       className="relative px-5 py-3 max-h-52 overflow-y-auto font-mono text-xs leading-relaxed"
-      style={{ background: "rgba(0,0,0,0.45)" }}>
-      <div className="crt-scanline" />
+      style={{ background: "#0d1117" }}>
+      <div className="crt-scan" />
       {lines.map((line, i) => (
         <div key={i}
           className={`log-line ${
-            line.startsWith("✓") ? "terminal-green" :
-            line.startsWith("✗") ? "terminal-red"   :
-            line.startsWith("⚠") ? "terminal-amber" :
-            line.startsWith("ℹ") ? "terminal-blue"  : "terminal-dim"
+            line.startsWith("✓") ? "t-green"  :
+            line.startsWith("✗") ? "t-red"    :
+            line.startsWith("⚠") ? "t-amber"  :
+            line.startsWith("ℹ") ? "t-blue"   : "t-dim"
           }`}
-          style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}>
+          style={{ animationDelay: `${Math.min(i * 18, 180)}ms` }}>
           {line || "\u00a0"}
         </div>
       ))}
     </div>
   );
-}
-
-// ─── Badge ────────────────────────────────────────────────────────────────────
-
-function Badge({ color, children }: { color: "green" | "red" | "indigo" | "dim"; children: React.ReactNode }) {
-  const styles = {
-    green:  { background: "rgba(52,211,153,0.10)",  border: "1px solid rgba(52,211,153,0.25)",  color: "#34d399" },
-    red:    { background: "rgba(248,113,113,0.10)", border: "1px solid rgba(248,113,113,0.25)", color: "#f87171" },
-    indigo: { background: "rgba(99,102,241,0.12)",  border: "1px solid rgba(99,102,241,0.30)",  color: "#818cf8" },
-    dim:    { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(148,163,184,0.5)" },
-  }[color];
-  return <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={styles}>{children}</span>;
 }
 
 // ─── Step Result dispatcher ───────────────────────────────────────────────────
@@ -807,7 +696,7 @@ function StepResult({ index, state, chainStatus, transactions }: {
     const cre   = state.data.cre   as CRERunResponse    | undefined;
     const mint  = state.data.mint  as MintResponse      | undefined;
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {actus && <ActusPanel data={actus} />}
         {cre   && <CRETerminal result={cre} />}
         {mint  && mint.success && <TxCard label="Mint Confirmed" txHash={mint.txHash ?? null} lines={[
@@ -822,7 +711,7 @@ function StepResult({ index, state, chainStatus, transactions }: {
     const cre   = state.data.cre   as CRERunResponse    | undefined;
     const actus = state.data.actus as DemoHealthResponse | undefined;
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {cre   && <CRETerminal result={cre} />}
         {actus && <ActusPanel data={actus} />}
       </div>
@@ -838,7 +727,7 @@ function StepResult({ index, state, chainStatus, transactions }: {
     const cre   = state.data.cre   as CRERunResponse    | undefined;
     const actus = state.data.actus as DemoHealthResponse | undefined;
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {cre   && <CRETerminal result={cre} />}
         {actus && <ActusPanel data={actus} />}
       </div>
@@ -848,7 +737,7 @@ function StepResult({ index, state, chainStatus, transactions }: {
   if (index === 6) {
     const mint = state.data.mint as MintResponse | undefined;
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <MintAllowedCard />
         {mint && mint.success && <TxCard label="Mint Confirmed" txHash={mint.txHash ?? null} lines={[
           `Minted: 100,000 cvUSD`,
@@ -869,11 +758,10 @@ function Step0Result({ chainStatus, transactions }: {
 }) {
   if (!chainStatus) return null;
   return (
-    <div className="space-y-4">
-      <div className="glass-inner rounded-xl p-4">
-        <div className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "rgba(129,140,248,0.8)" }}>
-          {chainStatus.network} · ChainID {chainStatus.chainId}
-        </div>
+    <div className="space-y-3">
+      {/* Contract addresses */}
+      <div className="gloss-inner p-4">
+        <div className="section-label mb-3">{chainStatus.network} · ChainID {chainStatus.chainId}</div>
         <div className="space-y-2">
           {[
             ["ConvergeStablecoin (cvUSD)", chainStatus.stablecoinAddress],
@@ -882,45 +770,47 @@ function Step0Result({ chainStatus, transactions }: {
             ["Deployer",                   chainStatus.deployerAddress],
           ].map(([label, addr]) => (
             <div key={label} className="flex items-center gap-3 text-xs">
-              <span className="w-48 flex-shrink-0" style={{ color: "rgba(148,163,184,0.6)" }}>{label}</span>
+              <span className="text-gray-400 flex-shrink-0" style={{ width: "180px" }}>{label}</span>
               <a href={`https://sepolia.etherscan.io/address/${addr}`} target="_blank" rel="noopener noreferrer"
-                className="code-chip text-indigo-300 hover:text-indigo-200">{addr}</a>
+                className="code-chip">{addr}</a>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <GlassMetric label="Total Supply"     value={`${chainStatus.totalSupply.toLocaleString()}`}     sub="cvUSD · totalSupply()"       level="safe" />
-        <GlassMetric label="Deployer Balance" value={`${chainStatus.deployerBalance.toLocaleString()}`} sub="cvUSD · balanceOf(deployer)"  level="safe" />
-        <GlassMetric label="LINK Balance"     value={chainStatus.linkBalance.toFixed(2)}                 sub="LINK · CRE fees"              level={chainStatus.linkBalance > 1 ? "safe" : "warning"} />
+      {/* Balances grid */}
+      <div className="grid grid-cols-3 gap-2">
+        <MetricTile label="Total Supply"     value={chainStatus.totalSupply.toLocaleString()} sub="cvUSD" level="safe" />
+        <MetricTile label="Deployer Balance" value={chainStatus.deployerBalance.toLocaleString()} sub="cvUSD" level="safe" />
+        <MetricTile label="LINK Balance"     value={chainStatus.linkBalance.toFixed(2)} sub="LINK" level={chainStatus.linkBalance > 1 ? "safe" : "warning"} />
       </div>
 
+      {/* Transactions */}
       {transactions && transactions.transactions.length > 0 && (
-        <div className="glass-inner rounded-xl p-4">
-          <div className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "rgba(129,140,248,0.8)" }}>
-            Recent Transactions
-          </div>
+        <div className="gloss-inner p-4">
+          <div className="section-label mb-3">Recent Transactions</div>
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b" style={{ borderColor: "rgba(255,255,255,0.06)", color: "rgba(100,116,139,0.8)" }}>
-                <th className="text-left py-1.5 pr-4">Hash</th>
-                <th className="text-left py-1.5 pr-4">Function</th>
-                <th className="text-left py-1.5 pr-4">Time</th>
-                <th className="text-center py-1.5">Status</th>
+              <tr className="border-b border-gray-100 text-gray-400">
+                <th className="text-left py-2 pr-4 font-medium">Hash</th>
+                <th className="text-left py-2 pr-4 font-medium">Function</th>
+                <th className="text-left py-2 pr-4 font-medium">Time</th>
+                <th className="text-center py-2 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {transactions.transactions.slice(0, 5).map(tx => (
-                <tr key={tx.hash} className="border-b" style={{ borderColor: "rgba(255,255,255,0.03)" }}>
-                  <td className="py-1.5 pr-4">
+                <tr key={tx.hash} className="border-b border-gray-50">
+                  <td className="py-2 pr-4">
                     <a href={`https://sepolia.etherscan.io/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer"
-                      className="code-chip text-indigo-400 hover:text-indigo-300">{tx.hash.slice(0, 12)}…</a>
+                      className="code-chip">{tx.hash.slice(0, 12)}…</a>
                   </td>
-                  <td className="py-1.5 pr-4" style={{ color: "rgba(148,163,184,0.7)" }}>{tx.functionName.split("(")[0] || "transfer"}</td>
-                  <td className="py-1.5 pr-4" style={{ color: "rgba(100,116,139,0.7)" }}>{new Date(Number(tx.timeStamp) * 1000).toLocaleString()}</td>
-                  <td className="py-1.5 text-center">
-                    <span className={tx.isError === "0" ? "terminal-green" : "terminal-red"}>{tx.isError === "0" ? "✓" : "✗"}</span>
+                  <td className="py-2 pr-4 text-gray-600">{tx.functionName.split("(")[0] || "transfer"}</td>
+                  <td className="py-2 pr-4 text-gray-400">{new Date(Number(tx.timeStamp) * 1000).toLocaleString()}</td>
+                  <td className="py-2 text-center">
+                    <span className={tx.isError === "0" ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                      {tx.isError === "0" ? "✓" : "✗"}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -940,42 +830,63 @@ function ActusPanel({ data }: { data: DemoHealthResponse }) {
   const open = h.mintGate === "OPEN";
 
   return (
-    <div className="glass-inner rounded-xl p-4 space-y-4">
+    <div className="gloss-inner p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: "rgba(129,140,248,0.8)" }}>
+        <span className="section-label">
           ACTUS Simulation — Phase {data.phase}
           {data.overrideDescription && ` · ${data.overrideDescription}`}
         </span>
-        <span className="text-xs" style={{ color: "rgba(100,116,139,0.7)" }}>
-          {data.contractCount} contracts · {data.totalACTUSEvents} events
-        </span>
+        <span className="text-xs text-gray-400">{data.contractCount} contracts · {data.totalACTUSEvents} events</span>
       </div>
 
-      <div className={`rounded-xl border-2 p-4 text-center ${open ? "mint-open-hero" : "mint-closed-hero"}`}>
-        <div className={`text-2xl font-black tracking-tight ${open ? "text-emerald-400" : "text-red-400"}`}>
-          {open ? "✅ MINTING ALLOWED" : "🛑 MINTING BLOCKED"}
-        </div>
-        <div className="text-xs mt-1" style={{ color: "rgba(148,163,184,0.6)" }}>
-          Supply: {formatUSD(h.tokenSupply)} · Reserves: {formatUSD(h.totalReserves)}
+      {/* Mint gate hero */}
+      <div className={open ? "mint-hero-open" : "mint-hero-closed"} style={{ borderRadius: "10px" }}>
+        <div className="p-4 text-center">
+          <div className={`text-xl font-black tracking-tight ${open ? "text-emerald-700" : "text-red-700"}`}>
+            {open ? "✅ MINTING ALLOWED" : "🛑 MINTING BLOCKED"}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Supply: {formatUSD(h.tokenSupply)} · Reserves: {formatUSD(h.totalReserves)}
+          </div>
         </div>
       </div>
 
+      {/* 4 gates */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <GateCard name="Backing"     passed={h.backingPass}     value={`${h.backingPct}%`}           threshold={`≥ ${th.backingPct}%`}         reg="GENIUS Act §4" />
-        <GateCard name="Liquidity"   passed={h.liquidityPass}   value={`${h.liquidityPct}%`}         threshold={`≥ ${th.liquidityPct}%`}       reg="MiCA Art.54" />
-        <GateCard name="Risk Score"  passed={h.riskPass}        value={`${h.riskScore}/100`}         threshold={`≤ ${th.riskScore}`}           reg="Composite" />
-        <GateCard name="Eligibility" passed={h.eligibilityPass} value={`${h.assetEligibilityPct}%`} threshold={`≥ ${th.assetEligibilityPct}%`} reg="GENIUS Act §4(a)" />
+        {[
+          { name: "Backing",     passed: h.backingPass,     value: `${h.backingPct}%`,           threshold: `≥ ${th.backingPct}%`,         reg: "GENIUS §4" },
+          { name: "Liquidity",   passed: h.liquidityPass,   value: `${h.liquidityPct}%`,         threshold: `≥ ${th.liquidityPct}%`,       reg: "MiCA 54" },
+          { name: "Risk Score",  passed: h.riskPass,        value: `${h.riskScore}/100`,         threshold: `≤ ${th.riskScore}`,           reg: "Composite" },
+          { name: "Eligibility", passed: h.eligibilityPass, value: `${h.assetEligibilityPct}%`, threshold: `≥ ${th.assetEligibilityPct}%`, reg: "GENIUS §4(a)" },
+        ].map((g, i) => (
+          <div key={g.name}
+            className={`rounded-xl border p-3 ${g.passed
+              ? "bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100"
+              : "bg-gradient-to-br from-red-50 to-rose-50 border-red-100"}`}
+            style={{ animationDelay: `${i * 60}ms` }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-500 uppercase tracking-wide">{g.name}</span>
+              <span className={`text-xs font-bold ${g.passed ? "text-emerald-600" : "text-red-600"}`}>
+                {g.passed ? "✓" : "✗"}
+              </span>
+            </div>
+            <div className={`text-lg font-black ${g.passed ? "text-emerald-700" : "text-red-700"}`}>{g.value}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{g.threshold}</div>
+            <div className="text-xs text-gray-300 italic">{g.reg}</div>
+          </div>
+        ))}
       </div>
 
+      {/* 8 metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <GlassMetric label="Backing"     value={fmtPct(h.backingPct)}             sub={`${formatUSD(h.totalReserves)} reserves`}                           level={backingLevel(h.backingPct)} />
-        <GlassMetric label="Liquidity"   value={fmtPct(h.liquidityPct)}           sub={`${formatUSD(h.cashReserves)} cash`}                                level={liquidityLevel(h.liquidityPct)} />
-        <GlassMetric label="Risk Score"  value={`${h.riskScore}`}                 sub={h.riskScore <= 70 ? "Within limit" : "Above limit (70)"}            level={riskLevel(h.riskScore)} />
-        <GlassMetric label="Eligibility" value={fmtPct(h.assetEligibilityPct)}   sub="GENIUS-permitted"                                                    level={eligibilityLevel(h.assetEligibilityPct)} />
-        <GlassMetric label="WAM"         value={`${h.wamDays}d`}                  sub="Weighted avg maturity"                                              level={h.wamDays <= 30 ? "safe" : h.wamDays <= 90 ? "warning" : "danger"} />
-        <GlassMetric label="Diversity"   value={`${h.custodianDiversityScore}`}   sub="Custodian HHI"                                                      level={diversityLevel(h.custodianDiversityScore)} />
-        <GlassMetric label="T-Bill %"    value={fmtPct(h.tbillPct)}              sub={`${formatUSD(h.tbillReserves)}`}                                     level={h.tbillPct <= 50 ? "safe" : "warning"} />
-        <GlassMetric label="Ineligible"  value={formatUSD(h.ineligibleReserves)} sub={h.ineligibleReserves === 0 ? "None — compliant" : "NON-GENIUS!"}    level={h.ineligibleReserves === 0 ? "safe" : "danger"} />
+        <MetricTile label="Backing"     value={fmtPct(h.backingPct)}           sub={`${formatUSD(h.totalReserves)} reserves`}                   level={backingLevel(h.backingPct)} />
+        <MetricTile label="Liquidity"   value={fmtPct(h.liquidityPct)}         sub={`${formatUSD(h.cashReserves)} cash`}                        level={liquidityLevel(h.liquidityPct)} />
+        <MetricTile label="Risk Score"  value={`${h.riskScore}`}               sub={h.riskScore <= 70 ? "Within limit" : "Above limit (70)"}    level={riskLevel(h.riskScore)} />
+        <MetricTile label="Eligibility" value={fmtPct(h.assetEligibilityPct)} sub="GENIUS-permitted"                                             level={eligibilityLevel(h.assetEligibilityPct)} />
+        <MetricTile label="WAM"         value={`${h.wamDays}d`}               sub="Weighted avg maturity"                                        level={h.wamDays <= 30 ? "safe" : h.wamDays <= 90 ? "warning" : "danger"} />
+        <MetricTile label="Diversity"   value={`${h.custodianDiversityScore}`} sub="Custodian HHI"                                               level={diversityLevel(h.custodianDiversityScore)} />
+        <MetricTile label="T-Bill %"    value={fmtPct(h.tbillPct)}            sub={formatUSD(h.tbillReserves)}                                   level={h.tbillPct <= 50 ? "safe" : "warning"} />
+        <MetricTile label="Ineligible"  value={formatUSD(h.ineligibleReserves)} sub={h.ineligibleReserves === 0 ? "None — compliant" : "NON-GENIUS!"} level={h.ineligibleReserves === 0 ? "safe" : "danger"} />
       </div>
 
       <MaturityLadder entries={h.maturityLadder} />
@@ -983,36 +894,19 @@ function ActusPanel({ data }: { data: DemoHealthResponse }) {
   );
 }
 
-// ─── Gate Card ────────────────────────────────────────────────────────────────
+// ─── Metric Tile ──────────────────────────────────────────────────────────────
 
-function GateCard({ name, passed, value, threshold, reg }: {
-  name: string; passed: boolean; value: string; threshold: string; reg: string;
-}) {
-  return (
-    <div className={`gate-card rounded-xl border p-3 liquid-fill ${passed ? "gate-card-pass" : "gate-card-fail"}`}
-      style={{ background: passed ? "rgba(52,211,153,0.06)" : "rgba(248,113,113,0.06)" }}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs uppercase tracking-wide" style={{ color: "rgba(148,163,184,0.6)" }}>{name}</span>
-        <span className={`text-sm font-bold ${passed ? "text-emerald-400" : "text-red-400"}`}>{passed ? "✓" : "✗"}</span>
-      </div>
-      <div className={`text-lg font-bold shimmer-text ${passed ? "shimmer-safe" : "shimmer-danger"}`}>{value}</div>
-      <div className="text-xs mt-0.5" style={{ color: "rgba(100,116,139,0.7)" }}>≥ {threshold}</div>
-      <div className="text-xs italic" style={{ color: "rgba(100,116,139,0.5)" }}>{reg}</div>
-    </div>
-  );
-}
-
-// ─── Glass Metric ─────────────────────────────────────────────────────────────
-
-function GlassMetric({ label, value, sub, level }: {
+function MetricTile({ label, value, sub, level }: {
   label: string; value: string; sub: string; level: "safe" | "warning" | "danger";
 }) {
-  const shimmerClass = level === "safe" ? "shimmer-safe" : level === "warning" ? "shimmer-warning" : "shimmer-danger";
+  const valueColor =
+    level === "safe"    ? "#059669" :
+    level === "warning" ? "#d97706" : "#dc2626";
   return (
-    <div className="metric-glass rounded-xl p-3">
-      <div className="text-xs uppercase tracking-wide mb-1" style={{ color: "rgba(148,163,184,0.5)" }}>{label}</div>
-      <div className={`text-xl font-bold shimmer-text ${shimmerClass}`}>{value}</div>
-      <div className="text-xs mt-0.5" style={{ color: "rgba(100,116,139,0.65)" }}>{sub}</div>
+    <div className="metric-tile p-3">
+      <div className="section-label mb-1">{label}</div>
+      <div className="text-xl font-black" style={{ color: valueColor }}>{value}</div>
+      <div className="text-xs text-gray-400 mt-0.5">{sub}</div>
     </div>
   );
 }
@@ -1021,23 +915,22 @@ function GlassMetric({ label, value, sub, level }: {
 
 function CRETerminal({ result }: { result: CRERunResponse }) {
   return (
-    <div className="cre-terminal">
-      <div className="cre-terminal-header">
+    <div className="cre-box">
+      <div className="cre-topbar">
         <div className="cre-dot" style={{ background: "#ff5f57" }} />
         <div className="cre-dot" style={{ background: "#febc2e" }} />
         <div className="cre-dot" style={{ background: "#28c840" }} />
-        <span className="ml-2 text-xs font-mono" style={{ color: "rgba(165,180,252,0.8)" }}>
+        <span className="ml-2 text-xs font-mono text-gray-500">
           cre workflow simulate --target {result.target} --broadcast
         </span>
-        <span className="ml-auto text-xs" style={{ color: result.success ? "rgba(52,211,153,0.8)" : "rgba(248,113,113,0.8)" }}>
+        <span className="ml-auto text-xs font-mono" style={{ color: result.success ? "#3fb950" : "#f85149" }}>
           exit {result.exitCode}
         </span>
       </div>
-      <pre className="px-4 py-3 text-xs font-mono max-h-44 overflow-y-auto leading-relaxed whitespace-pre-wrap"
-        style={{ color: "rgba(148,163,184,0.75)" }}>
+      <pre className="px-4 py-3 text-xs font-mono max-h-44 overflow-y-auto leading-relaxed whitespace-pre-wrap t-dim relative">
+        <div className="crt-scan" />
         {result.output || "(no output)"}
       </pre>
-      <div className="crt-scanline" />
     </div>
   );
 }
@@ -1047,54 +940,44 @@ function CRETerminal({ result }: { result: CRERunResponse }) {
 function TxCard({ label, txHash, lines, color }: {
   label: string; txHash: string | null; lines: string[]; color: "green" | "red";
 }) {
-  const borderColor = color === "green" ? "rgba(52,211,153,0.25)" : "rgba(248,113,113,0.25)";
-  const bg          = color === "green" ? "rgba(52,211,153,0.05)"  : "rgba(248,113,113,0.05)";
-  const textColor   = color === "green" ? "#34d399" : "#f87171";
   return (
-    <div className="rounded-xl p-4 space-y-2" style={{ border: `1px solid ${borderColor}`, background: bg }}>
-      <div className="text-xs font-semibold" style={{ color: textColor }}>{label}</div>
-      {lines.map((l, i) => <div key={i} className="text-xs" style={{ color: "rgba(148,163,184,0.75)" }}>{l}</div>)}
+    <div className={color === "green" ? "tx-card-green p-4" : "tx-card-red p-4"}>
+      <div className={`text-xs font-bold mb-2 ${color === "green" ? "text-emerald-700" : "text-red-700"}`}>
+        {label}
+      </div>
+      {lines.map((l, i) => <div key={i} className="text-xs text-gray-600 mb-0.5">{l}</div>)}
       {txHash && (
         <a href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-          className="code-chip text-indigo-400 hover:text-indigo-300 text-xs block break-all">{txHash}</a>
+          className="code-chip text-xs block break-all mt-2">{txHash}</a>
       )}
     </div>
   );
 }
 
-// ─── Mint Blocked Card ────────────────────────────────────────────────────────
+// ─── Mint Blocked / Allowed ───────────────────────────────────────────────────
 
 function MintBlockedCard({ reason }: { reason: string }) {
   return (
-    <div className="rounded-2xl border-2 p-6 text-center space-y-3 mint-closed-hero">
-      <div className="text-4xl font-black text-red-400" style={{ textShadow: "0 0 20px rgba(248,113,113,0.5)" }}>
-        🛑 MINT BLOCKED
+    <div className="blocked-card p-6 text-center space-y-3">
+      <div className="text-4xl font-black text-red-700">🛑 MINT BLOCKED</div>
+      <div className="text-sm text-gray-600">
+        Contract reverted with{" "}
+        <code className="code-chip text-xs text-red-700">MintBlockedError</code>
       </div>
-      <div className="text-sm" style={{ color: "rgba(148,163,184,0.7)" }}>
-        Contract reverted with <code className="code-chip text-red-300 text-xs">MintBlockedError</code>
-      </div>
-      <div className="inline-block px-4 py-2 rounded-xl text-sm font-medium text-red-200"
-        style={{ background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.25)" }}>
+      <div className="inline-block px-4 py-2 rounded-xl text-sm font-semibold text-red-700"
+        style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.18)" }}>
         "{reason}"
       </div>
-      <div className="text-xs" style={{ color: "rgba(100,116,139,0.6)" }}>
-        On-chain enforcement · gas estimation revert · no tx broadcast
-      </div>
+      <div className="text-xs text-gray-400">On-chain enforcement · gas estimation revert · no tx broadcast</div>
     </div>
   );
 }
 
-// ─── Mint Allowed Card ────────────────────────────────────────────────────────
-
 function MintAllowedCard() {
   return (
-    <div className="rounded-2xl border-2 p-6 text-center mint-open-hero">
-      <div className="text-4xl font-black text-emerald-400" style={{ textShadow: "0 0 20px rgba(52,211,153,0.5)" }}>
-        ✅ MINT ALLOWED
-      </div>
-      <div className="text-sm mt-2" style={{ color: "rgba(148,163,184,0.7)" }}>
-        Phase C · All 4 policy gates PASS
-      </div>
+    <div className="allowed-card p-6 text-center">
+      <div className="text-4xl font-black text-emerald-700">✅ MINT ALLOWED</div>
+      <div className="text-sm text-gray-600 mt-2">Phase C · All 4 policy gates PASS</div>
     </div>
   );
 }
@@ -1106,30 +989,36 @@ function MaturityLadder({ entries }: { entries: MaturityEntry[] }) {
   if (visible.length === 0) return null;
   return (
     <div>
-      <div className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: "rgba(129,140,248,0.7)" }}>
-        Reserve Composition — Maturity Ladder
-      </div>
+      <div className="section-label mb-2">Reserve Composition — Maturity Ladder</div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b" style={{ borderColor: "rgba(255,255,255,0.06)", color: "rgba(100,116,139,0.8)" }}>
-              <th className="text-left py-1.5 pr-3">Contract</th>
-              <th className="text-left py-1.5 pr-3">Category</th>
-              <th className="text-right py-1.5 pr-3">Principal</th>
-              <th className="text-right py-1.5 pr-3">Maturity</th>
-              <th className="text-center py-1.5 pr-3">Liquid</th>
-              <th className="text-center py-1.5">GENIUS</th>
+            <tr className="border-b border-gray-100 text-gray-400">
+              <th className="text-left py-2 pr-3 font-medium">Contract</th>
+              <th className="text-left py-2 pr-3 font-medium">Category</th>
+              <th className="text-right py-2 pr-3 font-medium">Principal</th>
+              <th className="text-right py-2 pr-3 font-medium">Maturity</th>
+              <th className="text-center py-2 pr-3 font-medium">Liquid</th>
+              <th className="text-center py-2 font-medium">GENIUS</th>
             </tr>
           </thead>
           <tbody>
             {visible.map(e => (
-              <tr key={e.contractID} className="border-b" style={{ borderColor: "rgba(255,255,255,0.03)" }}>
-                <td className="py-1.5 pr-3 font-mono" style={{ color: "rgba(203,213,225,0.8)" }}>{e.contractID}</td>
-                <td className="py-1.5 pr-3"><CategoryBadge category={e.category} /></td>
-                <td className="py-1.5 pr-3 text-right font-mono" style={{ color: "rgba(203,213,225,0.8)" }}>{formatUSD(e.principal)}</td>
-                <td className="py-1.5 pr-3 text-right" style={{ color: "rgba(148,163,184,0.6)" }}>{e.availableNow ? "now" : `${e.daysToMaturity}d`}</td>
-                <td className="py-1.5 pr-3 text-center">{e.availableNow ? <span className="terminal-green">✓</span> : <span className="terminal-red">✗</span>}</td>
-                <td className="py-1.5 text-center">{e.isGeniusEligible ? <span className="terminal-green">✓</span> : <span className="terminal-red">✗</span>}</td>
+              <tr key={e.contractID} className="border-b border-gray-50">
+                <td className="py-2 pr-3 font-mono text-gray-700">{e.contractID}</td>
+                <td className="py-2 pr-3"><CatBadge cat={e.category} /></td>
+                <td className="py-2 pr-3 text-right font-mono text-gray-700">{formatUSD(e.principal)}</td>
+                <td className="py-2 pr-3 text-right text-gray-500">{e.availableNow ? "now" : `${e.daysToMaturity}d`}</td>
+                <td className="py-2 pr-3 text-center">
+                  <span className={e.availableNow ? "text-emerald-600 font-bold" : "text-red-500"}>
+                    {e.availableNow ? "✓" : "✗"}
+                  </span>
+                </td>
+                <td className="py-2 text-center">
+                  <span className={e.isGeniusEligible ? "text-emerald-600 font-bold" : "text-red-500"}>
+                    {e.isGeniusEligible ? "✓" : "✗"}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1139,20 +1028,13 @@ function MaturityLadder({ entries }: { entries: MaturityEntry[] }) {
   );
 }
 
-// ─── Category Badge ───────────────────────────────────────────────────────────
-
-function CategoryBadge({ category }: { category: string }) {
-  const map: Record<string, { bg: string; color: string }> = {
-    cash:  { bg: "rgba(52,211,153,0.12)",  color: "#34d399" },
-    tbill: { bg: "rgba(96,165,250,0.12)",  color: "#60a5fa" },
-    repo:  { bg: "rgba(34,211,238,0.12)",  color: "#22d3ee" },
-    mmf:   { bg: "rgba(99,102,241,0.12)",  color: "#818cf8" },
+function CatBadge({ cat }: { cat: string }) {
+  const cls: Record<string, string> = {
+    cash: "cat-cash", tbill: "cat-tbill", repo: "cat-repo", mmf: "cat-mmf",
   };
-  const s = map[category] ?? { bg: "rgba(248,113,113,0.12)", color: "#f87171" };
   return (
-    <span className="px-1.5 py-0.5 rounded text-xs font-medium"
-      style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}22` }}>
-      {category}
+    <span className={`badge ${cls[cat] ?? "cat-other"}`} style={{ padding: "1px 6px", fontSize: "10px" }}>
+      {cat}
     </span>
   );
 }
