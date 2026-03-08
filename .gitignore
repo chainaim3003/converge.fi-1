@@ -35,3 +35,7 @@ npm-debug.log*
 # Hardhat
 cache/
 artifacts/
+
+
+workflows/risk-monitoring/.cre_build_tmp.js
+workflows/risk-monitoring/bun.lock

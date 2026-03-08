@@ -2,17 +2,342 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar for dark theme */
-::-webkit-scrollbar {
-  width: 6px;
+/* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.6); }
+
+/* ─── Aurora background ──────────────────────────────────────────────────────── */
+@keyframes aurora {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
-::-webkit-scrollbar-track {
-  background: #1a1a2e;
+
+.aurora-bg {
+  background: linear-gradient(
+    135deg,
+    #060b18 0%,
+    #0d1432 20%,
+    #0a1628 35%,
+    #0f1a40 50%,
+    #080d1e 65%,
+    #0c1530 80%,
+    #060b18 100%
+  );
+  background-size: 400% 400%;
+  animation: aurora 18s ease infinite;
 }
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
+
+/* ─── Sonar / radar ping ─────────────────────────────────────────────────────── */
+@keyframes sonar {
+  0%   { transform: scale(1);   opacity: 0.8; }
+  70%  { transform: scale(2.8); opacity: 0; }
+  100% { transform: scale(2.8); opacity: 0; }
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+
+.sonar-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: sonar 2s ease-out infinite;
 }
+.sonar-ring-green::after { border: 1.5px solid rgb(52 211 153); }
+.sonar-ring-red::after   { border: 1.5px solid rgb(248 113 113); animation-duration: 1s; }
+
+/* ─── Step number outer ring pulse ──────────────────────────────────────────── */
+@keyframes ring-ping {
+  0%   { transform: scale(1);   opacity: 1; }
+  75%  { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.ring-ping {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  animation: ring-ping 1.4s cubic-bezier(0,0,0.2,1) infinite;
+}
+
+/* ─── Shimmer sweep on metric values ─────────────────────────────────────────── */
+@keyframes shimmer-sweep {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer-text {
+  background-size: 200% auto;
+  animation: shimmer-sweep 3s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.shimmer-safe {
+  background-image: linear-gradient(90deg,
+    #34d399 0%, #6ee7b7 30%, #a7f3d0 50%, #6ee7b7 70%, #34d399 100%);
+}
+.shimmer-warning {
+  background-image: linear-gradient(90deg,
+    #fbbf24 0%, #fcd34d 30%, #fef08a 50%, #fcd34d 70%, #fbbf24 100%);
+}
+.shimmer-danger {
+  background-image: linear-gradient(90deg,
+    #f87171 0%, #fca5a5 30%, #fecaca 50%, #fca5a5 70%, #f87171 100%);
+}
+
+/* ─── Liquid fill (gate indicators on load) ──────────────────────────────────── */
+@keyframes liquid-fill {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+.liquid-fill {
+  transform-origin: bottom;
+  animation: liquid-fill 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── Circuit border sweep (step done flash) ─────────────────────────────────── */
+@keyframes border-sweep {
+  0%   { opacity: 0;   transform: scaleX(0) translateX(-100%); }
+  30%  { opacity: 1; }
+  100% { opacity: 0;   transform: scaleX(1) translateX(100%); }
+}
+
+.border-sweep-line {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #818cf8, #c7d2fe, #818cf8, transparent);
+  animation: border-sweep 0.8s ease-out forwards;
+}
+.border-sweep-line-green {
+  background: linear-gradient(90deg, transparent, #34d399, #6ee7b7, #34d399, transparent);
+}
+.border-sweep-line-red {
+  background: linear-gradient(90deg, transparent, #f87171, #fca5a5, #f87171, transparent);
+}
+
+/* ─── Log line slide-in ──────────────────────────────────────────────────────── */
+@keyframes log-slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.log-line {
+  animation: log-slide-in 0.18s ease-out forwards;
+}
+
+/* ─── CRT scanline ───────────────────────────────────────────────────────────── */
+@keyframes scanline {
+  0%   { top: -10%; }
+  100% { top: 110%; }
+}
+
+.crt-scanline {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(transparent, rgba(52,211,153,0.08), transparent);
+  pointer-events: none;
+  animation: scanline 4s linear infinite;
+}
+
+/* ─── Floating glow card hover ────────────────────────────────────────────────── */
+@keyframes card-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+  50%       { box-shadow: 0 0 20px 2px rgba(99,102,241,0.08); }
+}
+
+.glass-card {
+  background: rgba(255,255,255,0.028);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(255,255,255,0.10);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.glass-card:hover {
+  border-color: rgba(99,102,241,0.20);
+  box-shadow: 0 0 28px 0 rgba(99,102,241,0.07), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.glass-card-done {
+  border-color: rgba(52,211,153,0.18);
+  box-shadow: 0 0 20px 0 rgba(52,211,153,0.05);
+}
+.glass-card-blocked {
+  border-color: rgba(248,113,113,0.20);
+  box-shadow: 0 0 20px 0 rgba(248,113,113,0.06);
+  animation: card-glow-pulse 2s ease-in-out infinite;
+}
+.glass-card-running {
+  border-color: rgba(99,102,241,0.30);
+  box-shadow: 0 0 24px 0 rgba(99,102,241,0.10);
+}
+.glass-card-error {
+  border-color: rgba(248,113,113,0.20);
+  box-shadow: 0 0 16px 0 rgba(248,113,113,0.05);
+}
+
+/* ─── Glass sub-panel (inner cards) ─────────────────────────────────────────── */
+.glass-inner {
+  background: rgba(255,255,255,0.018);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── Glass header / bar ─────────────────────────────────────────────────────── */
+.glass-header {
+  background: rgba(6,11,24,0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ─── Persistent bar ─────────────────────────────────────────────────────────── */
+.glass-bar {
+  background: rgba(8,13,26,0.70);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(99,102,241,0.12);
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+/* ─── Logo glow ──────────────────────────────────────────────────────────────── */
+.logo-glow {
+  box-shadow: 0 0 16px 2px rgba(99,102,241,0.45), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+/* ─── Run button ─────────────────────────────────────────────────────────────── */
+.btn-run {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
+  background-size: 200% 200%;
+  box-shadow: 0 0 12px rgba(99,102,241,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: all 0.2s ease;
+  animation: btn-shimmer 3s ease infinite;
+}
+.btn-run:hover {
+  box-shadow: 0 0 20px rgba(99,102,241,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+  transform: translateY(-1px);
+}
+.btn-run:active { transform: translateY(0); }
+.btn-run:disabled { opacity: 0.5; transform: none; animation: none; }
+
+@keyframes btn-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+
+/* ─── Code chip (tx hash) ─────────────────────────────────────────────────────── */
+.code-chip {
+  background: rgba(99,102,241,0.10);
+  border: 1px solid rgba(99,102,241,0.20);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  transition: background 0.2s, border-color 0.2s;
+}
+.code-chip:hover {
+  background: rgba(99,102,241,0.18);
+  border-color: rgba(99,102,241,0.40);
+}
+
+/* ─── Gate fill animation wrapper ─────────────────────────────────────────────── */
+.gate-card {
+  overflow: hidden;
+  position: relative;
+  transition: box-shadow 0.3s ease;
+}
+.gate-card-pass {
+  border-color: rgba(52,211,153,0.25);
+  box-shadow: 0 0 12px rgba(52,211,153,0.06);
+}
+.gate-card-fail {
+  border-color: rgba(248,113,113,0.25);
+  box-shadow: 0 0 12px rgba(248,113,113,0.06);
+  animation: card-glow-pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Metric badge glass ─────────────────────────────────────────────────────── */
+.metric-glass {
+  background: rgba(255,255,255,0.022);
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+.metric-glass:hover {
+  background: rgba(255,255,255,0.04);
+  transform: translateY(-1px);
+}
+
+/* ─── Terminal glow text ──────────────────────────────────────────────────────── */
+.terminal-green  { color: #34d399; text-shadow: 0 0 8px rgba(52,211,153,0.4); }
+.terminal-red    { color: #f87171; text-shadow: 0 0 8px rgba(248,113,113,0.4); }
+.terminal-amber  { color: #fbbf24; text-shadow: 0 0 8px rgba(251,191,36,0.4); }
+.terminal-blue   { color: #60a5fa; text-shadow: 0 0 8px rgba(96,165,250,0.4); }
+.terminal-dim    { color: rgba(156,163,175,0.7); }
+
+/* ─── Step connector line ─────────────────────────────────────────────────────── */
+.step-connector {
+  width: 2px;
+  background: linear-gradient(to bottom, rgba(99,102,241,0.3), rgba(99,102,241,0.05));
+  margin: 0 auto;
+}
+.step-connector-done {
+  background: linear-gradient(to bottom, rgba(52,211,153,0.4), rgba(52,211,153,0.1));
+}
+
+/* ─── Fade in up ──────────────────────────────────────────────────────────────── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
+/* ─── Mint gate hero glow ─────────────────────────────────────────────────────── */
+@keyframes mint-open-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(52,211,153,0.15), inset 0 0 30px rgba(52,211,153,0.05); }
+  50%       { box-shadow: 0 0 35px rgba(52,211,153,0.25), inset 0 0 50px rgba(52,211,153,0.08); }
+}
+@keyframes mint-closed-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(248,113,113,0.15), inset 0 0 30px rgba(248,113,113,0.05); }
+  50%       { box-shadow: 0 0 35px rgba(248,113,113,0.25), inset 0 0 50px rgba(248,113,113,0.08); }
+}
+
+.mint-open-hero {
+  animation: mint-open-pulse 2.5s ease-in-out infinite;
+  border-color: rgba(52,211,153,0.35);
+  background: rgba(52,211,153,0.05);
+}
+.mint-closed-hero {
+  animation: mint-closed-pulse 1.2s ease-in-out infinite;
+  border-color: rgba(248,113,113,0.35);
+  background: rgba(248,113,113,0.05);
+}
+
+/* ─── CRE terminal box ────────────────────────────────────────────────────────── */
+.cre-terminal {
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(99,102,241,0.20);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.cre-terminal-header {
+  background: rgba(99,102,241,0.08);
+  border-bottom: 1px solid rgba(99,102,241,0.15);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cre-dot { width: 8px; height: 8px; border-radius: 50%; }

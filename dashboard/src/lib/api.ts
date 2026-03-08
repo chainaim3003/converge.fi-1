@@ -1,31 +1,85 @@
 /**
  * API client for converge.fi risk-engine (port 3001).
- * V4: Uses /api/demo/health-check?phase=A|B|C — single endpoint drives entire UI.
- * No mocks, no hardcoding, no fallbacks.
+ * V4: Real endpoints — no mocks, no fallbacks.
+ *
+ * Existing: fetchDemoHealth, fetchHealth
+ * New:      fetchChainStatus, fetchChainTransactions,
+ *           adminBurn, adminMint, adminCRErun
  */
 
 const BASE = "/api";
 
-// ─── Demo Health Check (V4 primary endpoint) ───
+// ─── Helper ──────────────────────────────────────────────────────────────────
 
-export async function fetchDemoHealth(phase: string): Promise<DemoHealthResponse> {
-  const res = await fetch(`${BASE}/demo/health-check?phase=${encodeURIComponent(phase)}`);
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Demo health check failed: ${res.status}`);
+    const err = await res.json().catch(() => ({})) as any;
+    throw new Error(err.error || `${path} failed: ${res.status}`);
   }
   return res.json();
 }
 
-// ─── ACTUS Connectivity ───
-
-export async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${BASE}/health`);
-  if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as any;
+    throw new Error(err.error || `${path} failed: ${res.status}`);
+  }
   return res.json();
 }
 
-// ─── Types (match risk-engine V4 response shapes exactly) ───
+// ─── Demo Health Check (existing — unchanged) ─────────────────────────────────
+
+export async function fetchDemoHealth(phase: string): Promise<DemoHealthResponse> {
+  return get<DemoHealthResponse>(`/demo/health-check?phase=${encodeURIComponent(phase)}`);
+}
+
+// ─── ACTUS Connectivity (existing — unchanged) ────────────────────────────────
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  return get<HealthResponse>("/health");
+}
+
+// ─── Chain Status ─────────────────────────────────────────────────────────────
+
+export async function fetchChainStatus(): Promise<ChainStatusResponse> {
+  return get<ChainStatusResponse>("/chain/status");
+}
+
+// ─── Chain Transactions ───────────────────────────────────────────────────────
+
+export async function fetchChainTransactions(): Promise<ChainTxResponse> {
+  return get<ChainTxResponse>("/chain/transactions");
+}
+
+// ─── Admin: Burn ──────────────────────────────────────────────────────────────
+
+export async function adminBurn(): Promise<BurnResponse> {
+  return post<BurnResponse>("/admin/burn", {});
+}
+
+// ─── Admin: Mint ──────────────────────────────────────────────────────────────
+
+export async function adminMint(amount: number): Promise<MintResponse> {
+  return post<MintResponse>("/admin/mint", { amount });
+}
+
+// ─── Admin: CRE Run ───────────────────────────────────────────────────────────
+
+export async function adminCRErun(target: "demo-A" | "demo-B" | "demo-C"): Promise<CRERunResponse> {
+  return post<CRERunResponse>("/admin/cre-run", { target });
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── Existing types (unchanged) ───────────────────────────────────────────────
 
 export interface DemoHealthResponse {
   phase: string;
@@ -95,4 +149,74 @@ export interface HealthResponse {
   services: Record<string, { status: string; latencyMs: number }>;
   config: { actusRiskHost: string; actusSimHost: string };
   timestamp: string;
+}
+
+// ─── New types ────────────────────────────────────────────────────────────────
+
+export interface ChainStatusResponse {
+  totalSupply: number;
+  deployerBalance: number;
+  mintAllowed: boolean;
+  mintReason: string;
+  onChainBacking: number;
+  onChainLiquidity: number;
+  onChainRiskScore: number;
+  staleAge: number;
+  linkBalance: number;
+  blockNumber: number;
+  stablecoinAddress: string;
+  policyAddress: string;
+  consumerAddress: string;
+  deployerAddress: string;
+  network: string;
+  chainId: number;
+}
+
+export interface ChainTx {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  functionName: string;
+  timeStamp: string;
+  isError: string;
+  gasUsed: string;
+  confirmations: string;
+}
+
+export interface ChainTxResponse {
+  transactions: ChainTx[];
+  count: number;
+}
+
+export interface BurnResponse {
+  success: boolean;
+  txHash: string | null;
+  burnedAmount: number;
+  newSupply: number;
+  message?: string;
+  blockNumber?: number;
+}
+
+export interface MintResponse {
+  success: boolean;
+  // When mint succeeds:
+  txHash?: string;
+  mintedAmount?: number;
+  newBalance?: number;
+  newSupply?: number;
+  blockNumber?: number;
+  // When mint is blocked:
+  blocked?: boolean;
+  reason?: string;
+  // When mint errors (non-blocked):
+  error?: string;
+}
+
+export interface CRERunResponse {
+  success: boolean;
+  exitCode: number;
+  output: string;
+  target?: string;
+  error?: string;
 }

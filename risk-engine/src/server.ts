@@ -20,6 +20,8 @@ import verifyRouter from "./routes/verify";
 import portfoliosRouter from "./routes/portfolios";
 import scenariosRouter from "./routes/scenarios";
 import demoRouter from "./routes/demo";
+import chainRouter from "./routes/chain";
+import adminRouter from "./routes/admin";
 
 const app = express();
 
@@ -40,6 +42,8 @@ app.use("/api", verifyRouter);
 app.use("/api", portfoliosRouter);
 app.use("/api", scenariosRouter);
 app.use("/api", demoRouter);
+app.use("/api", chainRouter);
+app.use("/api", adminRouter);
 
 // ─── Root ───
 app.get("/", (_req, res) => {
