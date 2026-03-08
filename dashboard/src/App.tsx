@@ -114,7 +114,7 @@ function App() {
       appendLog(0, `✓ Block #${status.blockNumber} — ${status.network}`);
       appendLog(0, `✓ totalSupply: ${status.totalSupply.toLocaleString()} cvUSD`);
       appendLog(0, `✓ deployerBalance: ${status.deployerBalance.toLocaleString()} cvUSD`);
-      appendLog(0, `✓ LINK balance: ${status.linkBalance.toFixed(4)} LINK`);
+
       appendLog(0, `✓ Mint gate: ${status.mintAllowed ? "OPEN" : "CLOSED"} — ${status.mintReason}`);
       appendLog(0, `✓ Loaded ${txns.transactions.length} recent transactions`);
       addTicker("🔗", `Chain connected · Block #${status.blockNumber} · Gate ${status.mintAllowed ? "OPEN" : "CLOSED"}`);
@@ -342,23 +342,9 @@ function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            {chainStatus && (
-              <div className="flex items-center gap-2 text-xs">
-                <div className="relative flex-shrink-0">
-                  <div className={`w-2.5 h-2.5 rounded-full relative z-10 ${chainStatus.mintAllowed ? "bg-emerald-500" : "bg-red-500"}`} />
-                  <div className={`sonar-ring absolute inset-0 rounded-full ${chainStatus.mintAllowed ? "sonar-green" : "sonar-red"}`} />
-                </div>
-                <span className="text-gray-500">Mint Gate</span>
-                <span className={`font-bold ${chainStatus.mintAllowed ? "text-emerald-600" : "text-red-600"}`}>
-                  {chainStatus.mintAllowed ? "OPEN" : "CLOSED"}
-                </span>
-              </div>
-            )}
-            <div className="text-xs px-3 py-1 rounded-full font-medium"
-              style={{ background: "#ede9fe", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.18)" }}>
-              Chainlink CRE
-            </div>
+          <div className="text-xs px-3 py-1 rounded-full font-medium"
+            style={{ background: "#ede9fe", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.18)" }}>
+            Chainlink CRE
           </div>
         </div>
       </header>
@@ -387,21 +373,10 @@ function PersistentBar({ status, refreshing, metricsOnLeft, onSwap }: {
   return (
     <div className="gloss-bar px-6 py-2 sticky z-40" style={{ top: "56px" }}>
       <div className="max-w-screen-xl mx-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
-        <span className="section-label">Live Chain</span>
+        <span className="section-label">Balances</span>
 
-        <BarStat label="Supply"   value={`${status.totalSupply.toLocaleString()} cvUSD`} />
-        <BarStat label="Deployer" value={`${status.deployerBalance.toLocaleString()} cvUSD`} />
-        <BarStat label="LINK"     value={status.linkBalance.toFixed(2)} />
-
-        <div className="h-3 w-px bg-gray-200" />
-
-        <BarStat label="Backing"   value={`${status.onChainBacking}%`}   ok={status.onChainBacking >= 100} />
-        <BarStat label="Liquidity" value={`${status.onChainLiquidity}%`} ok={status.onChainLiquidity >= 30} />
-        <BarStat label="Risk"      value={`${status.onChainRiskScore}`}  ok={status.onChainRiskScore <= 70} />
-
-        <span className={`badge ${status.mintAllowed ? "badge-green" : "badge-red"}`}>
-          {status.mintAllowed ? "✓ Mint Open" : "✗ Mint Closed"}
-        </span>
+        <BalancePill label="Total Supply" value={`${status.totalSupply.toLocaleString()} cvUSD`} />
+        <BalancePill label="Deployer" value={`${status.deployerBalance.toLocaleString()} cvUSD`} />
 
         {refreshing && <LoadingSpinner size="sm" />}
 
@@ -418,14 +393,13 @@ function PersistentBar({ status, refreshing, metricsOnLeft, onSwap }: {
   );
 }
 
-function BarStat({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
+function BalancePill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="text-gray-500">
-      {label}:{" "}
-      <strong className={ok === undefined ? "text-gray-800" : ok ? "text-emerald-600" : "text-red-600"}>
-        {value}
-      </strong>
-    </span>
+    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg"
+      style={{ background: "rgba(79,70,229,0.06)", border: "1px solid rgba(79,70,229,0.12)" }}>
+      <span className="text-gray-400" style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+      <span className="font-bold text-gray-900" style={{ fontSize: "12px" }}>{value}</span>
+    </div>
   );
 }
 
@@ -440,7 +414,7 @@ function MetricsPanel({ chainStatus, refreshing, ticker, chainReady }: {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between px-1">
-        <span className="section-label">Live Metrics</span>
+        <span className="section-label">Metrics Update</span>
         {refreshing && <LoadingSpinner size="sm" />}
       </div>
 
@@ -507,18 +481,7 @@ function MetricsPanel({ chainStatus, refreshing, ticker, chainReady }: {
             )}
           </div>
 
-          {/* Balances */}
-          <div className="gloss-card p-4">
-            <div className="section-label mb-3">Balances</div>
-            <div className="space-y-2">
-              <BalRow label="Total Supply"    value={`${chainStatus.totalSupply.toLocaleString()} cvUSD`} />
-              <BalRow label="Deployer"        value={`${chainStatus.deployerBalance.toLocaleString()} cvUSD`} />
-              <BalRow label="LINK"            value={`${chainStatus.linkBalance.toFixed(4)} LINK`} warn={chainStatus.linkBalance < 1} />
-              <div className="divider my-1" />
-              <BalRow label="Block"           value={`#${chainStatus.blockNumber}`} mono />
-              <BalRow label="Network"         value={chainStatus.network} />
-            </div>
-          </div>
+
 
           {/* Activity Ticker */}
           <div className="gloss-card p-4">
@@ -779,10 +742,9 @@ function Step0Result({ chainStatus, transactions }: {
       </div>
 
       {/* Balances grid */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <MetricTile label="Total Supply"     value={chainStatus.totalSupply.toLocaleString()} sub="cvUSD" level="safe" />
         <MetricTile label="Deployer Balance" value={chainStatus.deployerBalance.toLocaleString()} sub="cvUSD" level="safe" />
-        <MetricTile label="LINK Balance"     value={chainStatus.linkBalance.toFixed(2)} sub="LINK" level={chainStatus.linkBalance > 1 ? "safe" : "warning"} />
       </div>
 
       {/* Transactions */}
