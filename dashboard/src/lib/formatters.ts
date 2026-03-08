@@ -1,13 +1,15 @@
 /**
- * Formatting utilities for dashboard display.
+ * V4 Formatting utilities.
+ * All metrics are integer percentages (490 = 490%, 69 = 69%).
+ * No bps conversion needed.
  */
 
-/** Convert basis points to percentage string: 10200 → "102.00%" */
-export function bpsToPercent(bps: number): string {
-  return (bps / 100).toFixed(2) + "%";
+/** Format integer percentage: 490 → "490%" */
+export function fmtPct(value: number): string {
+  return `${value}%`;
 }
 
-/** Format large numbers with commas: 100000000 → "$100,000,000" */
+/** Format large numbers with commas: 490000 → "$490,000" */
 export function formatUSD(value: number): string {
   return "$" + value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
@@ -27,28 +29,32 @@ export function riskLevel(score: number): "safe" | "warning" | "danger" {
   return "danger";
 }
 
-/** Backing ratio to severity level (basis points) */
-export function backingLevel(bps: number): "safe" | "warning" | "danger" {
-  if (bps >= 10500) return "safe";      // 105%+
-  if (bps >= 10000) return "warning";   // 100-105%
-  return "danger";                       // <100%
+/** Backing % to severity level (V4: integer %) */
+export function backingLevel(pct: number): "safe" | "warning" | "danger" {
+  if (pct >= 150) return "safe";
+  if (pct >= 100) return "warning";
+  return "danger";
 }
 
-/** Liquidity ratio to severity level (basis points) */
-export function liquidityLevel(bps: number): "safe" | "warning" | "danger" {
-  if (bps >= 2000) return "safe";       // 20%+
-  if (bps >= 1000) return "warning";    // 10-20%
-  return "danger";                       // <10%
+/** Liquidity % to severity level (V4: threshold is 30%) */
+export function liquidityLevel(pct: number): "safe" | "warning" | "danger" {
+  if (pct >= 50) return "safe";
+  if (pct >= 30) return "warning";
+  return "danger";
 }
 
-/** Format timestamp as relative time: "2m ago", "1h ago" */
-export function timeAgo(timestamp: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - timestamp;
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+/** Asset eligibility to severity level (V4: must be 100%) */
+export function eligibilityLevel(pct: number): "safe" | "warning" | "danger" {
+  if (pct >= 100) return "safe";
+  if (pct >= 80) return "warning";
+  return "danger";
+}
+
+/** Custodian diversity to severity level */
+export function diversityLevel(score: number): "safe" | "warning" | "danger" {
+  if (score >= 70) return "safe";
+  if (score >= 50) return "warning";
+  return "danger";
 }
 
 /** Format ISO date string to short display: "Mar 7, 2026" */
@@ -57,8 +63,12 @@ export function formatDate(isoString: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** Format ISO date string to time: "14:32" */
-export function formatTime(isoString: string): string {
-  const d = new Date(isoString);
-  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+/** Format timestamp as relative time */
+export function timeAgo(timestamp: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
