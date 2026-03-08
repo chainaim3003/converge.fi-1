@@ -1,24 +1,3 @@
 {
-  "name": "converge-fi-privacy-reserve-check",
-  "version": "1.0.0",
-  "description": "WF3: Confidential reserve health check with protected API credentials",
-  "trigger": {
-    "type": "http",
-    "config": {
-      "method": "POST",
-      "path": "/privacy-check"
-    }
-  },
-  "config": {
-    "RISK_CONSUMER_ADDRESS": "",
-    "SEPOLIA_RPC_URL": ""
-  },
-  "secrets": {
-    "RISK_ENGINE_URL": "http://localhost:3001",
-    "API_SECRET": ""
-  },
-  "target": {
-    "chainId": 11155111,
-    "network": "sepolia"
-  }
+  "_NOTE": "This file is superseded by config.json in this same directory. config.json has the correct structure matching the Config type in workflow.ts. This file is kept only as a historical artifact and is NOT read by the CRE CLI."
 }

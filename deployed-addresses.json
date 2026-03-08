@@ -2,12 +2,12 @@
   "network": "sepolia",
   "chainId": 11155111,
   "deployer": "0x0c5e419D592d116bD9cE3DeE3D613F8b166e42EE",
-  "deployedAt": "2026-03-08T02:31:21.568Z",
+  "deployedAt": "2026-03-08T17:06:01.289Z",
   "version": "v4",
   "contracts": {
-    "MultiAttributeRiskPolicy": "0x61dc9d5904094829fFcBAf7f1970b9d387Dc1d71",
-    "MultiAttributeConvergeRiskConsumer": "0x904b5C81705918b4B00439468a7e1d97dF2b6934",
-    "ConvergeStablecoin": "0x19b6B9434D077DF9DFcE82be3568b4c0B39e6568"
+    "MultiAttributeRiskPolicy": "0x55B3b71Fc2f4e5371109dB1D0A032040B1989a23",
+    "MultiAttributeConvergeRiskConsumer": "0xA783a0FF8290C42D1f79C2d5fcda8B98Ba9B0b06",
+    "ConvergeStablecoin": "0x267d6Bb159B44738c6BB7556838CF88cc2ffd601"
   },
   "sharedInfra": {
     "MockKeystoneForwarder": "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"

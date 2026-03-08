@@ -1,84 +1,113 @@
-# WF3: Privacy Reserve Check Workflow
+# WF3: Privacy Reserve Check Workflow — V4
 #
-# Privacy track.
-# Trigger: HTTP (confidential)
-# Action: Uses Confidential HTTP to call risk-engine → API credentials protected
+# Privacy track submission for Chainlink Convergence Hackathon.
+#
+# Trigger: CronCapability (every 2 hours)
+# Action: Uses CRE ConfidentialHTTPClient to call risk-engine inside TEE enclave.
+#         API credentials retrieved from Vault DON via nodeRuntime.getSecret().
+#         DON nodes never see the raw HTTP request, response, or credentials.
+#         On-chain output is IDENTICAL to WF1 (same 8 fields, same ABI, same contracts).
+#
+# Key difference from WF1 (risk-monitoring):
+#   - ConfidentialHTTPClient instead of HTTPClient
+#   - Secrets from Vault DON (not public config)
+#   - Authorization header added (Bearer token)
+#   - Zero contract changes
+#
+# Official docs:
+#   ConfidentialHTTPClient: https://docs.chain.link/cre/reference/sdk/confidential-http-client-ts
+#   Secrets management:     https://docs.chain.link/cre/guides/workflow/secrets/using-secrets-deployed
+#   Privacy standard:       https://docs.chain.link/oracle-platform/privacy-standard
+#
+# NOTE: ConfidentialHTTPClient is "(Experimental)" as of March 2026.
+#       See: https://docs.chain.link/cre/reference/sdk/overview-ts
 
 name: "converge-privacy-reserve-check"
-description: "Confidential reserve health check with protected API credentials"
+description: "TEE-protected reserve health check — API credentials and raw data never leave enclave"
 
 trigger:
-  type: http
+  type: cron
   config:
-    method: POST
-    path: "/privacy-check"
+    schedule: "0 */2 * * *"    # Every 2 hours
 
 actions:
-  # Step 1: Confidential HTTP call to risk-engine
-  # API credentials are protected by CRE confidential compute
+  # Step 1: Confidential HTTP call to risk-engine (inside TEE enclave)
+  #
+  # Secrets (RISK_ENGINE_URL, API_SECRET) are retrieved from Vault DON
+  # via nodeRuntime.getSecret() inside the workflow.ts code.
+  # The ConfidentialHTTPClient executes the HTTP request inside the TEE.
+  # DON nodes provide decryption shares but cannot see plaintext.
   - name: "fetch-risk-report-confidential"
-    type: httpClient.sendRequest
+    type: confidentialHttpClient.sendRequest
     config:
       method: POST
-      url: "${RISK_ENGINE_URL}/api/v1/cre-report"
+      url: "${RISK_ENGINE_URL}/api/v1/cre-report"    # From Vault DON secret
       headers:
         Content-Type: "application/json"
-        Authorization: "Bearer ${API_SECRET}"
+        Authorization: "Bearer ${API_SECRET}"          # From Vault DON secret
       body:
         simulationId: "StableCoin-BackingRatio-RedemptionPressure-30d"
         scenarioId: "sc_depeg_stress_scn01"
-      confidential: true  # CRE Confidential HTTP — credentials not exposed
     output: riskReport
 
-  # Step 2: Process metrics
+  # Step 2: Process metrics (same as WF1 — runs in consensus mode)
   - name: "process-metrics"
     type: runtime.compute
     config:
       code: |
         const report = inputs.riskReport.report;
         return {
-          backingRatioBps: report.backingRatioBps,
-          liquidityRatioBps: report.liquidityRatioBps,
+          backingPct: report.backingPct,
+          liquidityPct: report.liquidityPct,
           riskScore: report.riskScore,
           maturityGapDays: report.maturityGapDays,
           timestamp: report.timestamp,
-          scenarioId: report.scenarioId
+          scenarioId: report.scenarioId,
+          assetEligibilityPct: report.assetEligibilityPct,
+          custodianDiversityScore: report.custodianDiversityScore
         };
     inputs:
       riskReport: "${fetch-risk-report-confidential.output}"
     output: metrics
 
-  # Step 3: Sign and write on-chain
+  # Step 3: Sign report — DON signs the ABI-encoded 8-field payload
+  # Includes TEE attestation that data was produced inside a verified enclave.
   - name: "sign-report"
     type: runtime.report
     config:
       encoding: "abi"
       types:
-        - { name: "backingRatioBps", type: "uint16" }
-        - { name: "liquidityRatioBps", type: "uint16" }
-        - { name: "riskScore", type: "uint8" }
-        - { name: "maturityGapDays", type: "uint8" }
+        - { name: "backingPct", type: "uint16" }
+        - { name: "liquidityPct", type: "uint16" }
+        - { name: "riskScore", type: "uint16" }
+        - { name: "maturityGapDays", type: "uint16" }
         - { name: "timestamp", type: "uint40" }
         - { name: "scenarioId", type: "bytes32" }
+        - { name: "assetEligibilityPct", type: "uint16" }
+        - { name: "custodianDiversityScore", type: "uint16" }
     inputs:
-      backingRatioBps: "${process-metrics.output.backingRatioBps}"
-      liquidityRatioBps: "${process-metrics.output.liquidityRatioBps}"
+      backingPct: "${process-metrics.output.backingPct}"
+      liquidityPct: "${process-metrics.output.liquidityPct}"
       riskScore: "${process-metrics.output.riskScore}"
       maturityGapDays: "${process-metrics.output.maturityGapDays}"
       timestamp: "${process-metrics.output.timestamp}"
       scenarioId: "${process-metrics.output.scenarioId}"
+      assetEligibilityPct: "${process-metrics.output.assetEligibilityPct}"
+      custodianDiversityScore: "${process-metrics.output.custodianDiversityScore}"
     output: signedReport
 
+  # Step 4: Write on-chain — IDENTICAL to WF1
+  # MultiAttributeConvergeRiskConsumer receives the same 8-field payload.
+  # The contract cannot distinguish between WF1 and WF3 reports.
   - name: "write-on-chain"
     type: evmClient.writeReport
     config:
-      chain: "ethereum-sepolia"
+      chain: "ethereum-testnet-sepolia"
       contractAddress: "${RISK_CONSUMER_ADDRESS}"
       method: "onReport"
     inputs:
       report: "${sign-report.output}"
 
-env:
-  RISK_ENGINE_URL: "http://localhost:3001"
-  RISK_CONSUMER_ADDRESS: ""
-  API_SECRET: ""  # Protected by CRE confidential compute
+# Secrets are managed via secrets.yaml + Vault DON (production)
+# or .env file (local simulation). They are NOT in this config.
+# See: https://docs.chain.link/cre/guides/workflow/secrets/using-secrets-deployed
