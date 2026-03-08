@@ -703,7 +703,7 @@ function StepResult({ index, state, chainStatus, transactions }: {
     const mint  = state.data.mint  as MintResponse      | undefined;
     return (
       <div className="space-y-3">
-        {actus && <ActusPanel data={actus} />}
+        {actus && <ActusPanel data={actus} showSupply />}
         {cre   && <CRETerminal result={cre} />}
         {mint  && mint.success && <TxCard label="Mint Confirmed" txHash={mint.txHash ?? null} lines={[
           `Minted: 100,000 cvUSD`,
@@ -829,7 +829,7 @@ function Step0Result({ chainStatus, transactions }: {
 
 // ─── ACTUS Panel ──────────────────────────────────────────────────────────────
 
-function ActusPanel({ data, alertMode }: { data: DemoHealthResponse; alertMode?: boolean }) {
+function ActusPanel({ data, alertMode, showSupply }: { data: DemoHealthResponse; alertMode?: boolean; showSupply?: boolean }) {
   const h  = data.health;
   const th = data.thresholds;
   const open = h.mintGate === "OPEN";
@@ -850,9 +850,11 @@ function ActusPanel({ data, alertMode }: { data: DemoHealthResponse; alertMode?:
           <div className={`text-xl font-black tracking-tight ${open ? "text-emerald-700" : alertMode ? "text-amber-700" : "text-red-700"}`}>
             {open ? "✅ MINTING ALLOWED" : alertMode ? "⚠ RESERVE METRICS ALERT: Further Minting could be blocked" : "🛑 MINTING BLOCKED"}
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Supply: {formatUSD(h.tokenSupply)} · Reserves: {formatUSD(h.totalReserves)}
-          </div>
+          {showSupply && (
+            <div className="text-xs text-gray-500 mt-1">
+              Supply: {formatUSD(h.tokenSupply)} · Reserves: {formatUSD(h.totalReserves)}
+            </div>
+          )}
         </div>
       </div>
 
