@@ -3,6 +3,7 @@
  * GET  /api/demo/health-check?phase=B  — Run with Phase B stress override
  * GET  /api/demo/health-check?phase=C  — Run with Phase C restore override
  *
+ * V4: Returns 8-field health metrics (all uint16 scale) + GENIUS Act compliance.
  * Uses shared helpers from utils/demo-helpers.ts (same logic as cre-report.ts demo branch).
  */
 
@@ -40,27 +41,28 @@ router.get("/demo/health-check", async (req: Request, res: Response) => {
     } else if (phase === "C") {
       overrides = readJson(path.join(demoDir, "override_phaseC_restore.json"));
     } else {
-      overrides = readJson(path.join(demoDir, "reserve_overrides.json"));
+      overrides = { overrideActive: false, portfolioAdjustments: [], contracts: [], earlyLiquidations: [] };
     }
 
-    // 3. Merge (handles tokenSupplyOverride from override files)
+    // 3. Merge
     const merged = mergePortfolio(portfolio, overrides);
 
-    // 4. Build ACTUS eventsBatch request
-    const actusContracts = merged.contracts.map((c: any) => ({
-      contractType: c.contractType,
-      contractID: c.contractID,
-      contractRole: c.contractRole,
-      contractDealDate: c.contractDealDate,
-      initialExchangeDate: c.initialExchangeDate,
-      statusDate: c.statusDate,
-      maturityDate: c.maturityDate,
-      notionalPrincipal: String(c.notionalPrincipal),
-      nominalInterestRate: String(c.nominalInterestRate),
-      currency: c.currency,
-      dayCountConvention: c.dayCountConvention,
-      description: c.description,
-    }));
+    // 4. Build ACTUS eventsBatch request (skip zeroed-out contracts)
+    const actusContracts = merged.contracts
+      .filter((c: any) => c.notionalPrincipal > 0)
+      .map((c: any) => ({
+        contractType: c.contractType,
+        contractID: c.contractID,
+        contractRole: c.contractRole,
+        contractDealDate: c.contractDealDate,
+        initialExchangeDate: c.initialExchangeDate,
+        statusDate: c.statusDate,
+        maturityDate: c.maturityDate,
+        notionalPrincipal: String(c.notionalPrincipal),
+        nominalInterestRate: String(c.nominalInterestRate),
+        currency: c.currency,
+        dayCountConvention: c.dayCountConvention,
+      }));
 
     // 5. POST to ACTUS 8083
     const actusUrl = `${config.actusSimHost}/eventsBatch`;
@@ -75,7 +77,7 @@ router.get("/demo/health-check", async (req: Request, res: Response) => {
       (sum: number, r: any) => sum + (r.events || []).length, 0
     );
 
-    // 6. Compute health
+    // 6. Compute all 8 health metrics
     const health = computeHealthFromPortfolio(merged, actusResult);
 
     // 7. Build forward simulation summary
@@ -96,10 +98,10 @@ router.get("/demo/health-check", async (req: Request, res: Response) => {
     // 8. Return
     res.json({
       phase: phase || "A",
-      overrideActive: overrides.overrideActive,
+      overrideActive: overrides.overrideActive || false,
       overrideDescription: overrides.description || null,
       actusServer: config.actusSimHost,
-      contractCount: merged.contracts.length,
+      contractCount: actusContracts.length,
       totalACTUSEvents: totalEvents,
       health,
       forwardSimulation,

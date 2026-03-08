@@ -1,17 +1,21 @@
 /**
- * WF1: Converge.fi Risk Monitoring Workflow
+ * WF1: Converge.fi Risk Monitoring Workflow — V4
  *
  * Trigger  : CronCapability — every hour ("0 * * * *")
- * Step 1   : HTTPClient.sendRequest (NodeRuntime) → POST risk-engine /api/v1/cre-report
- *            Consensus: consensusIdenticalAggregation — all DON nodes call the same
- *            public risk-engine endpoint; results must be identical.
- * Step 2   : runtime.report() — DON signs the ABI-encoded risk payload
- * Step 3   : EVMClient.writeReport() — KeystoneForwarder delivers to RiskConsumerWithACE
+ * Step 1   : HTTPClient.sendRequest → POST risk-engine /api/v1/cre-report
+ * Step 2   : runtime.report() — DON signs the ABI-encoded 8-field payload (256 bytes)
+ * Step 3   : EVMClient.writeReport() — ReceiverTemplate delivers to MultiAttributeConvergeRiskConsumer
  *
- * SDK source of truth: node_modules/@chainlink/cre-sdk/dist/sdk/index.d.ts
- * Docs: https://docs.chain.link/cre/reference/sdk/core-ts
- *       https://docs.chain.link/cre/reference/sdk/evm-client-ts
- *       https://docs.chain.link/cre/reference/sdk/http-client-ts
+ * V4 changes:
+ *   - 8 fields (was 6): + assetEligibilityPct, custodianDiversityScore
+ *   - All uint16 for numerics (was mix of uint8/uint16)
+ *   - Integer % scale (was bps)
+ *   - Field renames: backingRatioBps → backingPct, liquidityRatioBps → liquidityPct
+ *
+ * ABI encoding must match RiskReportExtractor.decode() on-chain:
+ *   abi.decode(data, (uint16, uint16, uint16, uint16, uint40, bytes32, uint16, uint16))
+ *
+ * SDK docs: https://docs.chain.link/cre/reference/sdk/core-ts
  */
 
 import {
@@ -33,39 +37,30 @@ import {
 import { encodeAbiParameters, decodeAbiParameters, parseAbiParameters, keccak256, toBytes } from "viem";
 
 // ─── Config shape ─────────────────────────────────────────────────────────────
-// Declared to match config.json co-located with this file.
-// All values sourced from config.json — no hardcoding.
 type Config = {
-  schedule: string;           // cron expression, e.g. "0 * * * *"
-  riskEngineUrl: string;      // e.g. "http://your-risk-engine:3001"
-  riskConsumerAddress: string;// deployed RiskConsumerWithACE address on Sepolia
-  stablecoinAddress: string;  // deployed ConvergeStablecoin address on Sepolia
-  simulationId: string;       // e.g. "StableCoin-MaturityLadder-30d"
-  scenarioId: string;         // e.g. "sc_depeg_stress_scn01"
-  chainName: string;          // "ethereum-testnet-sepolia"
-  gasLimit: string;           // e.g. "500000"
+  schedule: string;
+  riskEngineUrl: string;
+  riskConsumerAddress: string;
+  stablecoinAddress: string;
+  simulationId: string;
+  scenarioId: string;
+  chainName: string;
+  gasLimit: string;
 };
 
-// ─── Risk report shape (mirrors CRE report route response) ───────────────────
+// ─── V4 Risk report shape (8 fields, all uint16 numerics) ────────────────────
 type RiskReport = {
-  backingRatioBps: number;   // uint16 — total reserves / supply in bps (10000 = 100%)
-  liquidityRatioBps: number; // uint16 — cash reserves / supply in bps
-  riskScore: number;         // uint8  — composite risk score 0-100
-  maturityGapDays: number;   // uint8  — days until next T-bill maturity
-  timestamp: number;         // uint40 — unix timestamp of computation
-  scenarioId: string;        // bytes32 hex string — e.g. keccak256("sc_depeg_stress_scn01")
+  backingPct: number;              // uint16 — integer % (490 = 490%)
+  liquidityPct: number;            // uint16 — integer % (69 = 69%)
+  riskScore: number;               // uint16 — 0-100 scale
+  maturityGapDays: number;         // uint16 — WAM in days
+  timestamp: number;               // uint40 — unix seconds
+  scenarioId: string;              // → keccak256 → bytes32
+  assetEligibilityPct: number;     // uint16 — 0-100 (100 = all GENIUS-eligible)
+  custodianDiversityScore: number; // uint16 — 0-100 (80 = well diversified)
 };
 
-// ─── Step 1 helper: fetch risk report on each node ───────────────────────────
-/**
- * Runs inside runtime.runInNodeMode — receives NodeRuntime.
- * Each DON node independently POSTs to the risk-engine and returns the report.
- * consensusIdenticalAggregation then requires all nodes agree on the result.
- *
- * Source: SDK README — HTTP Operations section
- *   https://github.com/smartcontractkit/cre-sdk-typescript
- */
-// Converts Uint8Array to 0x-prefixed hex string — pure arithmetic, works in WASM runtime
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function bytesToHex(bytes: Uint8Array): `0x${string}` {
   let hex = '0x';
   for (let i = 0; i < bytes.length; i++) {
@@ -74,7 +69,6 @@ function bytesToHex(bytes: Uint8Array): `0x${string}` {
   return hex as `0x${string}`;
 }
 
-// base64 encoder — btoa is not available in the CRE WASM runtime
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function encodeBase64(str: string): string {
   const bytes = Array.from(str).map(c => c.charCodeAt(0));
@@ -91,11 +85,11 @@ function encodeBase64(str: string): string {
   return result;
 }
 
+// ─── Step 1: Fetch risk report from Express server ───────────────────────────
 const fetchRiskReport = (nodeRuntime: NodeRuntime<Config>): RiskReport => {
   const httpClient = new HTTPClient();
   const targetUrl = `${nodeRuntime.config.riskEngineUrl}/api/v1/cre-report`;
 
-  // Gap 1: log the exact URL being called so a connection failure is immediately obvious
   nodeRuntime.log(`[fetchRiskReport] POST ${targetUrl}`);
 
   const response = httpClient
@@ -111,14 +105,10 @@ const fetchRiskReport = (nodeRuntime: NodeRuntime<Config>): RiskReport => {
     .result();
 
   if (!ok(response)) {
-    // Gap 1: include URL and status so you know which server rejected the request
-    throw new Error(
-      `Risk engine POST failed — url=${targetUrl} status=${response.statusCode}`
-    );
+    throw new Error(`Risk engine POST failed — url=${targetUrl} status=${response.statusCode}`);
   }
 
-  // Gap 1: confirm the response arrived before parsing
-  nodeRuntime.log(`[fetchRiskReport] Response OK (status ${response.statusCode}), parsing body`);
+  nodeRuntime.log(`[fetchRiskReport] Response OK (status ${response.statusCode})`);
 
   const body = json(response) as { report: RiskReport };
 
@@ -129,65 +119,47 @@ const fetchRiskReport = (nodeRuntime: NodeRuntime<Config>): RiskReport => {
   return body.report;
 };
 
-// ─── Main handler: runs in DON context ───────────────────────────────────────
-/**
- * onCronTrigger executes on every cron tick.
- * Callback signature: (runtime: Runtime<Config>, payload: CronPayload) => string
- * Source: https://docs.chain.link/cre/reference/sdk/triggers/cron-trigger-ts
- */
+// ─── Main handler ────────────────────────────────────────────────────────────
 const onCronTrigger = (
   runtime: Runtime<Config>,
   _payload: CronPayload
 ): string => {
-  runtime.log("Converge.fi risk monitoring workflow triggered");
+  runtime.log("Converge.fi V4 risk monitoring workflow triggered");
 
-  // ── Step 1: Fetch risk metrics from risk-engine ──────────────────────────
-  // runInNodeMode: each node calls fetchRiskReport independently.
-  // consensusIdenticalAggregation: all nodes must return the same report object.
-  // Source: https://docs.chain.link/cre/reference/sdk/core-ts#runtimeruninnodemode
+  // ── Step 1: Fetch 8-field risk report ───────────────────────────────────
   const report: RiskReport = runtime
     .runInNodeMode(fetchRiskReport, consensusIdenticalAggregation<RiskReport>())()
     .result();
 
   runtime.log(
-    `Risk report: backing=${report.backingRatioBps}bps ` +
-    `liquidity=${report.liquidityRatioBps}bps ` +
-    `score=${report.riskScore} ` +
-    `maturityGap=${report.maturityGapDays}d`
+    `Risk report: backing=${report.backingPct}% liquidity=${report.liquidityPct}% ` +
+    `score=${report.riskScore} wam=${report.maturityGapDays}d ` +
+    `eligibility=${report.assetEligibilityPct}% custodian=${report.custodianDiversityScore}`
   );
 
-  // ── Step 2: ABI-encode the payload ──────────────────────────────────────
-  // Encoding must match RiskReportExtractor.decode() on-chain:
-  //   abi.decode(data, (uint16, uint16, uint8, uint8, uint40, bytes32))
-  // Source: contracts/src/extractors/RiskReportExtractor.sol
-  //
-  // encodeAbiParameters is from viem — used exactly as in the Chainlink blog
-  // example: https://blog.chain.link/5-ways-to-build-with-cre/
+  // ── Step 2: ABI-encode 8 fields (256 bytes) ───────────────────────────
+  // Must match RiskReportExtractor.decode() on-chain:
+  //   abi.decode(data, (uint16, uint16, uint16, uint16, uint40, bytes32, uint16, uint16))
   const encoded = encodeAbiParameters(
     parseAbiParameters(
-      "uint16 backingRatioBps, uint16 liquidityRatioBps, uint8 riskScore, uint8 maturityGapDays, uint40 timestamp, bytes32 scenarioId"
+      "uint16 backingPct, uint16 liquidityPct, uint16 riskScore, uint16 maturityGapDays, " +
+      "uint40 timestamp, bytes32 scenarioId, uint16 assetEligibilityPct, uint16 custodianDiversityScore"
     ),
     [
-      report.backingRatioBps,
-      report.liquidityRatioBps,
+      report.backingPct,
+      report.liquidityPct,
       report.riskScore,
       report.maturityGapDays,
       BigInt(report.timestamp),
-      // keccak256-hash the string scenarioId → bytes32, matching
-      // RiskReportExtractor.sol: "e.g. keccak256('sc_depeg_stress_scn01')"
-      // keccak256 and toBytes are from viem (already a root dep via @chainlink/cre-sdk)
       keccak256(toBytes(report.scenarioId)),
+      report.assetEligibilityPct,
+      report.custodianDiversityScore,
     ]
   );
 
-  // Gap 5: confirm encoding succeeded and show byte count
   runtime.log(`ABI encoded: ${(encoded.length - 2) / 2} bytes`);
 
-  // ── Step 3: Generate DON-signed report ──────────────────────────────────
-  // hexToBase64 converts the viem hex string to the base64 format runtime.report expects.
-  // Source: SDK dist/sdk/utils/hex-utils.d.ts
-  // Encoder defaults (evm / ecdsa / keccak256) from:
-  //   https://docs.chain.link/cre/reference/sdk/evm-client-ts
+  // ── Step 3: DON-signed report ──────────────────────────────────────────
   const signedReport = runtime
     .report({
       encodedPayload: hexToBase64(encoded),
@@ -199,36 +171,22 @@ const onCronTrigger = (
 
   runtime.log("Report signed by DON");
 
-  // ── Step 4: Submit to RiskConsumerWithACE via KeystoneForwarder ─────────
-  // getNetwork looks up the chain selector by string name from the SDK's
-  // built-in chain-selectors list.
-  // Source: dist/sdk/utils/chain-selectors/get-network.d.ts
+  // ── Step 4: Write to MultiAttributeConvergeRiskConsumer ────────────────
   const network = getNetwork({
     chainFamily: "evm",
     chainSelectorName: runtime.config.chainName,
     isTestnet: true,
   });
 
-  if (!network) {
-    throw new Error(`Network not found: ${runtime.config.chainName}`);
-  }
+  if (!network) throw new Error(`Network not found: ${runtime.config.chainName}`);
 
-  // Gap 5: confirm network resolved correctly — wrong chainName silently returns null above
-  runtime.log(`Network resolved: ${runtime.config.chainName} selector=${network.chainSelector.selector}`);
+  runtime.log(`Network resolved: ${runtime.config.chainName}`);
 
-  // EVMClient constructor takes the numeric chain selector (bigint).
-  // Source: dist/generated-sdk/capabilities/blockchain/evm/v1alpha/client_sdk_gen.d.ts
   const evmClient = new EVMClient(network.chainSelector.selector);
 
-  // Gap 5: log the exact receiver and gasLimit before the on-chain write
   runtime.log(`Submitting on-chain: receiver=${runtime.config.riskConsumerAddress} gasLimit=${runtime.config.gasLimit}`);
 
-  // writeReport sends the DON-signed report to the KeystoneForwarder.
-  // The Forwarder verifies signatures then calls onReport(metadata, report)
-  // on RiskConsumerWithACE.
-  // WriteCreReportRequestJson: receiver is the contract address string.
-  // Source: dist/generated-sdk/capabilities/blockchain/evm/v1alpha/client_sdk_gen.d.ts
-  evmClient
+  const writeReply = evmClient
     .writeReport(runtime, {
       receiver: runtime.config.riskConsumerAddress,
       report: signedReport,
@@ -237,11 +195,51 @@ const onCronTrigger = (
     .result();
 
   runtime.log(
-    `Report written to ${runtime.config.riskConsumerAddress} on ${runtime.config.chainName}`
+    `writeReport reply: tx_status=${writeReply.txStatus}` +
+    ` receiver_status=${writeReply.receiverContractExecutionStatus}` +
+    ` tx_hash=${writeReply.txHash ?? "(none)"}` +
+    ` error=${writeReply.errorMessage ?? "(none)"}`
   );
 
-  // ── Step 5: Read getMintStatus() from ConvergeStablecoin ──────────────────
-  // getMintStatus() selector = first 4 bytes of keccak256("getMintStatus()")
+  // ── Evaluate delivery result ──────────────────────────────────────────
+  // CRE SDK proto enum for tx_status (CRE CLI v1.3.0):
+  //   0 = TX_STATUS_UNSPECIFIED
+  //   1 = TX_STATUS_BROADCASTED
+  //   2 = TX_STATUS_CONFIRMED
+  //   3 = TX_STATUS_FINALIZED
+  //   4 = TX_STATUS_FAILED
+  //
+  // receiver_contract_execution_status:
+  //   0 = SUCCESS (contract executed without revert)
+  //   1 = REVERTED (onReport() or _processReport() reverted)
+  //
+  // The authoritative signal for report delivery is receiver_status.
+  // tx_status=2 (CONFIRMED) is success, not failure.
+  // Only treat receiver_status !== 0 or explicit tx failure as errors.
+
+  // Check receiver execution first — this is the definitive signal
+  if (writeReply.receiverContractExecutionStatus !== undefined &&
+      writeReply.receiverContractExecutionStatus !== 0) {
+    throw new Error(
+      `onReport() reverted inside forwarder: receiver_status=${writeReply.receiverContractExecutionStatus}` +
+      ` tx_status=${writeReply.txStatus}` +
+      ` error=${writeReply.errorMessage ?? ""}` +
+      ` — check ReceiverTemplate forwarder and policy wiring (run scripts/diagnose.ts)`
+    );
+  }
+
+  // Check for explicit tx failure (status 4 = FAILED in proto enum)
+  // Do NOT fail on status 2 (CONFIRMED) or 3 (FINALIZED) — these are success states
+  if (writeReply.txStatus !== undefined && writeReply.txStatus >= 4) {
+    throw new Error(
+      `writeReport tx failed: tx_status=${writeReply.txStatus}` +
+      ` error=${writeReply.errorMessage ?? ""}`
+    );
+  }
+
+  runtime.log(`✅ Report delivered to ${runtime.config.riskConsumerAddress} (tx_status=${writeReply.txStatus})`);
+
+  // ── Step 5: Read getMintStatus() from ConvergeStablecoin ──────────────
   const getMintStatusSelector = keccak256(toBytes("getMintStatus()")).slice(0, 10) as `0x${string}`;
 
   const mintStatusReply = evmClient
@@ -254,16 +252,16 @@ const onCronTrigger = (
     })
     .result();
 
-  // Decode: getMintStatus() returns (bool, string, uint16, uint16, uint8, uint256)
-  const [mintAllowed, reason, backingBps, liquidityBps, riskScore, staleAge] =
+  // V4: riskScore is now uint16 (was uint8)
+  const [mintAllowed, reason, backingPct, liquidityPct, riskScore, staleAge] =
     decodeAbiParameters(
-      parseAbiParameters("bool mintAllowed, string reason, uint16 backingBps, uint16 liquidityBps, uint8 riskScore, uint256 staleAge"),
+      parseAbiParameters("bool mintAllowed, string reason, uint16 backingPct, uint16 liquidityPct, uint16 riskScore, uint256 staleAge"),
       bytesToHex(mintStatusReply.data)
     );
 
   runtime.log(
     `getMintStatus(): mintAllowed=${mintAllowed} reason="${reason}" ` +
-    `backingBps=${backingBps} liquidityBps=${liquidityBps} riskScore=${riskScore} staleAge=${staleAge}s`
+    `backing=${backingPct}% liquidity=${liquidityPct}% riskScore=${riskScore} staleAge=${staleAge}s`
   );
 
   if (mintAllowed) {
@@ -276,26 +274,11 @@ const onCronTrigger = (
 };
 
 // ─── Workflow registration ────────────────────────────────────────────────────
-/**
- * initWorkflow creates the handler array.
- * The CRE runtime calls this with the parsed config.json.
- * Source: https://docs.chain.link/cre/reference/sdk/core-ts#initworkflow
- */
 const initWorkflow = (config: Config) => {
   const cron = new CronCapability();
-  return [
-    handler(
-      cron.trigger({ schedule: config.schedule }),
-      onCronTrigger
-    ),
-  ];
+  return [handler(cron.trigger({ schedule: config.schedule }), onCronTrigger)];
 };
 
-// ─── Entry point ─────────────────────────────────────────────────────────────
-/**
- * main() is required by the CRE runtime as the WASM entry point.
- * Source: https://docs.chain.link/cre/reference/sdk/core-ts#main
- */
 export async function main() {
   const runner = await Runner.newRunner<Config>();
   await runner.run(initWorkflow);

@@ -16207,7 +16207,7 @@ var fetchRiskReport = (nodeRuntime) => {
   if (!ok(response)) {
     throw new Error(`Risk engine POST failed — url=${targetUrl} status=${response.statusCode}`);
   }
-  nodeRuntime.log(`[fetchRiskReport] Response OK (status ${response.statusCode}), parsing body`);
+  nodeRuntime.log(`[fetchRiskReport] Response OK (status ${response.statusCode})`);
   const body = json(response);
   if (!body.report) {
     throw new Error(`Risk engine response missing 'report' field — url=${targetUrl}`);
@@ -16215,16 +16215,18 @@ var fetchRiskReport = (nodeRuntime) => {
   return body.report;
 };
 var onCronTrigger = (runtime2, _payload) => {
-  runtime2.log("Converge.fi risk monitoring workflow triggered");
+  runtime2.log("Converge.fi V4 risk monitoring workflow triggered");
   const report2 = runtime2.runInNodeMode(fetchRiskReport, consensusIdenticalAggregation())().result();
-  runtime2.log(`Risk report: backing=${report2.backingRatioBps}bps ` + `liquidity=${report2.liquidityRatioBps}bps ` + `score=${report2.riskScore} ` + `maturityGap=${report2.maturityGapDays}d`);
-  const encoded = encodeAbiParameters(parseAbiParameters("uint16 backingRatioBps, uint16 liquidityRatioBps, uint8 riskScore, uint8 maturityGapDays, uint40 timestamp, bytes32 scenarioId"), [
-    report2.backingRatioBps,
-    report2.liquidityRatioBps,
+  runtime2.log(`Risk report: backing=${report2.backingPct}% liquidity=${report2.liquidityPct}% ` + `score=${report2.riskScore} wam=${report2.maturityGapDays}d ` + `eligibility=${report2.assetEligibilityPct}% custodian=${report2.custodianDiversityScore}`);
+  const encoded = encodeAbiParameters(parseAbiParameters("uint16 backingPct, uint16 liquidityPct, uint16 riskScore, uint16 maturityGapDays, " + "uint40 timestamp, bytes32 scenarioId, uint16 assetEligibilityPct, uint16 custodianDiversityScore"), [
+    report2.backingPct,
+    report2.liquidityPct,
     report2.riskScore,
     report2.maturityGapDays,
     BigInt(report2.timestamp),
-    keccak256(toBytes(report2.scenarioId))
+    keccak256(toBytes(report2.scenarioId)),
+    report2.assetEligibilityPct,
+    report2.custodianDiversityScore
   ]);
   runtime2.log(`ABI encoded: ${(encoded.length - 2) / 2} bytes`);
   const signedReport = runtime2.report({
@@ -16239,18 +16241,24 @@ var onCronTrigger = (runtime2, _payload) => {
     chainSelectorName: runtime2.config.chainName,
     isTestnet: true
   });
-  if (!network248) {
+  if (!network248)
     throw new Error(`Network not found: ${runtime2.config.chainName}`);
-  }
-  runtime2.log(`Network resolved: ${runtime2.config.chainName} selector=${network248.chainSelector.selector}`);
+  runtime2.log(`Network resolved: ${runtime2.config.chainName}`);
   const evmClient = new ClientCapability(network248.chainSelector.selector);
   runtime2.log(`Submitting on-chain: receiver=${runtime2.config.riskConsumerAddress} gasLimit=${runtime2.config.gasLimit}`);
-  evmClient.writeReport(runtime2, {
+  const writeReply = evmClient.writeReport(runtime2, {
     receiver: runtime2.config.riskConsumerAddress,
     report: signedReport,
     gasConfig: { gasLimit: runtime2.config.gasLimit }
   }).result();
-  runtime2.log(`Report written to ${runtime2.config.riskConsumerAddress} on ${runtime2.config.chainName}`);
+  runtime2.log(`writeReport reply: tx_status=${writeReply.txStatus}` + ` receiver_status=${writeReply.receiverContractExecutionStatus}` + ` tx_hash=${writeReply.txHash ?? "(none)"}` + ` error=${writeReply.errorMessage ?? "(none)"}`);
+  if (writeReply.receiverContractExecutionStatus !== undefined && writeReply.receiverContractExecutionStatus !== 0) {
+    throw new Error(`onReport() reverted inside forwarder: receiver_status=${writeReply.receiverContractExecutionStatus}` + ` tx_status=${writeReply.txStatus}` + ` error=${writeReply.errorMessage ?? ""}` + ` — check ReceiverTemplate forwarder and policy wiring (run scripts/diagnose.ts)`);
+  }
+  if (writeReply.txStatus !== undefined && writeReply.txStatus >= 4) {
+    throw new Error(`writeReport tx failed: tx_status=${writeReply.txStatus}` + ` error=${writeReply.errorMessage ?? ""}`);
+  }
+  runtime2.log(`✅ Report delivered to ${runtime2.config.riskConsumerAddress} (tx_status=${writeReply.txStatus})`);
   const getMintStatusSelector = keccak256(toBytes("getMintStatus()")).slice(0, 10);
   const mintStatusReply = evmClient.callContract(runtime2, {
     call: {
@@ -16259,8 +16267,8 @@ var onCronTrigger = (runtime2, _payload) => {
       data: hexToBase64(getMintStatusSelector)
     }
   }).result();
-  const [mintAllowed, reason, backingBps, liquidityBps, riskScore, staleAge] = decodeAbiParameters(parseAbiParameters("bool mintAllowed, string reason, uint16 backingBps, uint16 liquidityBps, uint8 riskScore, uint256 staleAge"), bytesToHex3(mintStatusReply.data));
-  runtime2.log(`getMintStatus(): mintAllowed=${mintAllowed} reason="${reason}" ` + `backingBps=${backingBps} liquidityBps=${liquidityBps} riskScore=${riskScore} staleAge=${staleAge}s`);
+  const [mintAllowed, reason, backingPct, liquidityPct, riskScore, staleAge] = decodeAbiParameters(parseAbiParameters("bool mintAllowed, string reason, uint16 backingPct, uint16 liquidityPct, uint16 riskScore, uint256 staleAge"), bytesToHex3(mintStatusReply.data));
+  runtime2.log(`getMintStatus(): mintAllowed=${mintAllowed} reason="${reason}" ` + `backing=${backingPct}% liquidity=${liquidityPct}% riskScore=${riskScore} staleAge=${staleAge}s`);
   if (mintAllowed) {
     runtime2.log("✅ Mint is ALLOWED — all policies healthy");
   } else {
@@ -16270,9 +16278,7 @@ var onCronTrigger = (runtime2, _payload) => {
 };
 var initWorkflow = (config) => {
   const cron = new CronCapability;
-  return [
-    handler(cron.trigger({ schedule: config.schedule }), onCronTrigger)
-  ];
+  return [handler(cron.trigger({ schedule: config.schedule }), onCronTrigger)];
 };
 async function main() {
   const runner = await Runner.newRunner();

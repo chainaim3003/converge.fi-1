@@ -2,34 +2,35 @@
   "network": "sepolia",
   "chainId": 11155111,
   "deployer": "0x0c5e419D592d116bD9cE3DeE3D613F8b166e42EE",
-  "deployedAt": "2026-03-03T06:47:45.969Z",
+  "deployedAt": "2026-03-08T02:31:21.568Z",
+  "version": "v4",
   "contracts": {
-    "BackingRatioPolicy": "0x19bAfAcEe772a516271C7c2651703663b18137e2",
-    "LiquidityRatioPolicy": "0xB8b6c105e3BF22aFfF16fC53A0Cdecb14D2Ea1F3",
-    "RiskScorePolicy": "0x0Da6d451b0340fa32E85cDfCE043f1c573b4036d",
-    "RiskConsumerWithACE": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58",
-    "ConvergeStablecoin": "0x8D8131547Ec5Cb2fF1bB941a28fA20e347A928F3"
+    "MultiAttributeRiskPolicy": "0x61dc9d5904094829fFcBAf7f1970b9d387Dc1d71",
+    "MultiAttributeConvergeRiskConsumer": "0x904b5C81705918b4B00439468a7e1d97dF2b6934",
+    "ConvergeStablecoin": "0x19b6B9434D077DF9DFcE82be3568b4c0B39e6568"
+  },
+  "sharedInfra": {
+    "MockKeystoneForwarder": "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
   },
   "constructorArgs": {
-    "BackingRatioPolicy": {
-      "thresholdBps": 10000,
-      "riskConsumer": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58"
+    "MultiAttributeRiskPolicy": {
+      "backingThreshold": 100,
+      "liquidityThreshold": 30,
+      "riskScoreThreshold": 70,
+      "eligibilityThreshold": 100,
+      "maxStaleAge": 86400
     },
-    "LiquidityRatioPolicy": {
-      "thresholdBps": 1000,
-      "riskConsumer": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58"
-    },
-    "RiskScorePolicy": {
-      "threshold": 70,
-      "riskConsumer": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58"
-    },
-    "RiskConsumerWithACE": {
-      "creForwarder": "0x0c5e419D592d116bD9cE3DeE3D613F8b166e42EE"
+    "MultiAttributeConvergeRiskConsumer": {
+      "forwarderAddress": "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
     },
     "ConvergeStablecoin": {
       "name": "Converge USD",
       "symbol": "cvUSD",
-      "maxStaleAge": 3600
+      "maxStaleAge": 86400
     }
+  },
+  "previousVersion": {
+    "backupFile": "deployed-addresses-v1-backup.json",
+    "note": "V1 contracts remain deployed on Sepolia but are no longer active"
   }
 }

@@ -1,8 +1,8 @@
 {
   "schedule": "0 * * * *",
   "riskEngineUrl": "http://localhost:3001",
-  "riskConsumerAddress": "0x3dC77FE8f9A29036306561800d05bcD2375a2F58",
-  "stablecoinAddress": "0x8D8131547Ec5Cb2fF1bB941a28fA20e347A928F3",
+  "riskConsumerAddress": "0x904b5C81705918b4B00439468a7e1d97dF2b6934",
+  "stablecoinAddress": "0x19b6B9434D077DF9DFcE82be3568b4c0B39e6568",
   "simulationId": "demo-phase-C",
   "scenarioId": "demo_mint_halt_restore",
   "chainName": "ethereum-testnet-sepolia",
